@@ -55,6 +55,29 @@
 	    `(get-bytes ,pkt ,@other-places)
 	    pkt))))
 
+;;; add-byte-helper
+(defmacro add-bytes-helper (packet value bytes)
+  "add an unsigned-int VALUE of BYTES bytes to PACKET"
+  (let ((vv (gensym "VV-")))
+    `(let ((,vv ,value))
+       (declare (type (unsigned-byte ,(* bytes 8)) ,vv))
+       (add-bytes ,packet ,@(loop :for ii :from (- bytes 1) :downto 0
+			          :collecting `(ldb (byte 8 ,(* ii 8))
+						    ,vv))))))
+
+(defmacro get-bytes-helper (packet value bytes)
+  (let ((pkt (gensym "PKT-")))
+    `(let ((,value 0)
+	   (,pkt ,packet))
+       (declare	(type (unsigned-byte ,(* bytes 8)) ,value)
+		(type packet ,pkt))
+       (let ((,pkt (get-bytes ,pkt
+			      ,@(loop :for ii :from (- bytes 1) :downto 0
+				      :collecting `(ldb (byte 8 ,(* ii 8))
+							,value)))))
+	 (declare (type packet ,pkt))
+	 (values ,value ,pkt)))))
+
 ;;; help build integer serialize/unserialize methods
 (defmacro make-uint-serializer (key bytes)
   `(progn
@@ -62,20 +85,11 @@
        (declare (type packet packet)
 		(ignore type)
 		(type (unsigned-byte ,(* bytes 8)) value))
-       (add-bytes packet
-		  ,@(loop :for ii :from (- bytes 1) :downto 0
-		       :collecting `(ldb (byte 8 ,(* ii 8)) value))))
+       (add-bytes-helper packet value ,bytes))
      (defmethod unserialize (packet (type (eql ,key)))
        (declare (type packet packet)
 		(ignore type))
-       (let ((value 0))
-	 (declare (type (unsigned-byte ,(* bytes 8)) value))
-	 (let ((packet (get-bytes packet
-				  ,@(loop :for ii :from (- bytes 1) :downto 0
-				       :collecting
-				       `(ldb (byte 8 ,(* ii 8)) value)))))
-	   (declare (type packet packet))
-	   (values value packet))))))
+       (get-bytes-helper packet value ,bytes))))
 
 ;;; unsigned-int serialization
 (make-uint-serializer :uint8  1)
@@ -86,7 +100,7 @@
 (make-uint-serializer :uint64 8)
 
 ;;; signed-int serialization helper
-(defmacro make-int-serializer (key ukey bytes)
+(defmacro make-int-serializer (key bytes)
   `(progn
      (defmethod serialize (packet (type (eql ,key)) value)
        (declare (type packet packet)
@@ -94,11 +108,12 @@
 		(type (signed-byte ,(* bytes 8)) value))
        (let ((vv (+ value ,(expt 2 (- (* bytes 8) 1)))))
 	 (declare (type (unsigned-byte ,(* bytes 8)) vv))
-	 (serialize packet ,ukey vv)))
+	 (add-bytes-helper packet vv ,bytes)))
      (defmethod unserialize (packet (type (eql ,key)))
        (declare (type packet packet)
 		(ignore type))
-       (multiple-value-bind (value packet) (unserialize packet ,ukey)
+       (multiple-value-bind (value packet)
+	   (get-bytes-helper packet value ,bytes)
 	 (declare (type (unsigned-byte ,(* bytes 8)) value)
 		  (type packet packet))
 	 (let ((vv (- value ,(expt 2 (- (* bytes 8) 1)))))
@@ -106,11 +121,11 @@
 	   (values vv packet))))))
 
 ;;; signed-int serialization methods
-(make-int-serializer :int8  :uint8  1)
-(make-int-serializer :int16 :uint16 2)
-(make-int-serializer :int32 :uint32 4)
-(make-int-serializer :int48 :uint48 6)
-(make-int-serializer :int64 :uint64 8)
+(make-int-serializer :int8  1)
+(make-int-serializer :int16 2)
+(make-int-serializer :int32 4)
+(make-int-serializer :int48 6)
+(make-int-serializer :int64 8)
 
 (defmacro serialize* ((type value &rest rest) packet)
   (if rest
@@ -136,29 +151,27 @@
 	     `((declare (ignore ,pkt)) ,@body)))))
 
 ;;; floating-point type helper
-(defmacro make-float-serializer (key int-key type int-type encoder decoder)
+(defmacro make-float-serializer (key type bytes encoder decoder)
   `(progn
      (defmethod serialize (packet (type (eql ,key)) value)
        (declare (type packet packet)
 		(ignore type)
 		(type ,type value))
-       (serialize packet ,int-key (,encoder value)))
+       (add-bytes-helper packet (,encoder value) ,bytes))
      (defmethod unserialize (packet (type (eql ,key)))
        (declare (type packet packet)
 		(ignore type))
        (multiple-value-bind (vv packet)
-	   (unserialize packet ,int-key)
-	 (declare (type ,int-type vv)
+	   (get-bytes-helper packet vv ,bytes)
+	 (declare (type (unsigned-byte ,(* bytes 8)) vv)
 		  (type packet packet))
 	 (values (,decoder vv) packet)))))
 
 ;;; floating-point type serializers/deserializers
-(make-float-serializer :float32     :uint32
-		       single-float (unsigned-byte 32)
+(make-float-serializer :float32 single-float 4
 		       ieee-floats:encode-float32
 		       ieee-floats:decode-float32)
-(make-float-serializer :float64     :uint64
-		       double-float (unsigned-byte 64)
+(make-float-serializer :float64 double-float 8
 		       ieee-floats:encode-float64
 		       ieee-floats:decode-float64)
 
@@ -173,7 +186,6 @@
     (incf (fill-pointer packet) length)
     (setf (subseq packet start (+ start length)) value)
     packet))
-
 
 (defmethod unserialize (packet (type (eql :bytes)))
   (declare (type packet packet)
@@ -202,3 +214,60 @@
     (declare (type (vector (unsigned-byte 8)) value)
 	     (type packet packet))
     (values (trivial-utf-8:utf-8-bytes-to-string value) packet)))
+
+;;; enum helper
+(defmacro make-enum-serializer (type (&rest choices))
+  (let ((bytes (nth-value 0 (ceiling (log (1+ (length choices)) 256)))))
+    `(progn
+       (defmethod serialize (packet (type (eql ,type)) value)
+	 (declare (type packet packet)
+		  (ignore type)
+		  (type symbol value))
+	 (let ((value (ecase value ,@(loop :for ii :from 1
+				           :for vv :in choices
+				           :collecting (list vv ii)))))
+	   (declare (type (unsigned-byte ,(* bytes 8)) value))
+	   (add-bytes-helper packet value ,bytes)))
+     (defmethod unserialize (packet (type (eql ,type)))
+       (declare (type packet packet)
+		(ignore type))
+       (multiple-value-bind (value packet)
+	   (get-bytes-helper packet value ,bytes)
+	 (declare (type (unsigned-byte ,(* bytes 8)) value)
+		  (type packet packet))
+	   (let ((value (ecase value ,@(loop :for ii :from 1
+					     :for vv :in choices
+					     :collecting (list ii vv)))))
+	     (declare (type symbol value))
+	     (values value packet)))))))
+
+(defmacro make-bitfield-serializer (type (&rest choices))
+  (let ((bytes (nth-value 0 (ceiling (length choices) 256))))
+    `(progn
+       (defmethod serialize (packet (type (eql ,type)) value)
+	 (declare (type packet packet)
+		  (ignore type)
+		  (type (vector symbol) value))
+	 (let ((val (reduce #'(lambda (acc sym)
+				  (logior acc
+					  (ecase sym
+					    ,@(loop :for ii :from 0
+						    :for vv :in choices
+						    :collecting
+						      (list vv (expt 2 ii))))))
+			      value
+			      :initial-value 0)))
+	   (declare (type (unsigned-byte ,(* bytes 8)) val))
+	   (add-bytes-helper packet val ,bytes)))
+     (defmethod unserialize (packet (type (eql ,type)))
+       (declare (type packet packet)
+		(ignore type))
+       (multiple-value-bind (value packet)
+	   (get-bytes-helper packet value ,bytes)
+	 (declare (type (unsigned-byte ,(* bytes 8)) value)
+		  (type packet packet))
+	 (assert (< value ,(expt 2 (length choices))))
+	 (values (loop :for ii :from 0 :below ,(length choices)
+		       :when (plusp (logand value (expt 2 ii)))
+		          :collect (svref (vector ,@choices) ii))
+		 packet))))))
