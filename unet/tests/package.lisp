@@ -5,4 +5,7 @@
 		      :make-displaced-packet
 		      :rewind-packet
 		      :serialize
-		      :serialize*))
+		      :serialize*
+		      :unserialize
+		      :unserialize*
+		      :unserialize-let*))
