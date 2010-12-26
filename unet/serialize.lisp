@@ -5,6 +5,7 @@
 (defgeneric serialize (packet type value)
   (:documentation "Method used to serialize a VALUE of given TYPE into PACKET")
   (:method (packet type value)
+    "There is no default way to serialize something, so chuck an error."
     (error "SERIALIZE not supported for type ~A" type)))
 
 ;;; unserialize generic function
@@ -12,14 +13,17 @@
   (:documentation
      "Method used to unserialize a value of given TYPE from PACKET")
   (:method (packet type)
+    "There is no default way to unserialize something, so chuck an error."
     (error "UNSERIALIZE not supported for type ~A" type)))
 
 (defmacro serialize* ((type value &rest rest) packet)
+  "SERIALIZE a list of TYPE + VALUE into PACKET returning the final PACKET.  For example:  (SERIALIZE* (:UINT8 5 :INT16 -10) PACKET)"
   (if rest
       `(serialize* ,rest (serialize ,packet ,type ,value))
       `(serialize ,packet ,type ,value)))
 
 (defmacro unserialize* ((type place &rest rest) packet &body body)
+  "UNSERIALIZE a list of TYPE + PLACE from the given PACKET and execute the body.  For example:  (LET (AA BB) (UNSERIALIZE* (:UINT8 AA :INT16 BB) PACKET (LIST AA BB)))"
   (let ((pp (gensym "PLACE-"))
 	(pk (gensym "PKT-")))
     `(multiple-value-bind (,pp ,pk)
@@ -29,15 +33,17 @@
 	    `((unserialize* ,rest ,pk ,@body))
 	    body))))
 
-(defmacro unserialize-let* ((type place &rest rest) packet &body body)
+(defmacro unserialize-let* ((type var &rest rest) packet &body body)
+  "UNSERIALIZE a list of TYPE + VARIABLE-NAME from the given PACKET and execute the body.  For example:  (UNSERIALIZE-LET* (:UINT8 AA :INT16 BB) PACKET (LIST AA BB))"
   (let ((pkt (gensym "PKT-")))
-    `(multiple-value-bind (,place ,pkt)
+    `(multiple-value-bind (,var ,pkt)
 	 (unserialize ,packet ,type)
        ,@(if rest
 	     `((unserialize-let* ,rest ,pkt ,@body))
 	     `((declare (ignore ,pkt)) ,@body)))))
 
 (defun unserialize-list* (types packet)
+  "UNSERIALIZE a list of types from the given PACKET into a list.  For example:  (MAPCAR #'PRINC (UNSERIALIZE-LIST* '(:UINT8 :INT16) PACKET))"
   (labels ((recurse (types packet list)
 	     (cond
 	       ((null types) (values (nreverse list) packet))
@@ -77,7 +83,7 @@
 
 ;;; get-bytes macro
 (defmacro get-bytes (packet place &rest other-places)
-  "Add some number of bytes from PACKET."
+  "fetch some number of bytes from PACKET into PLACE and OTHER-PLACES."
   (let ((byte (gensym "BYTE-"))
 	(pkt  (gensym "PKT-")))
     `(multiple-value-bind (,byte ,pkt)
@@ -89,7 +95,7 @@
 
 ;;; add-bytes-from-uint
 (defmacro add-bytes-from-uint (packet value bytes)
-  "add an unsigned-int VALUE of BYTES bytes to PACKET"
+  "Add an unsigned-int VALUE of BYTES bytes to PACKET"
   (let ((vv (gensym "VV-")))
     `(let ((,vv ,value))
        (declare (type (unsigned-byte ,(* bytes 8)) ,vv))
@@ -98,6 +104,7 @@
 						    ,vv))))))
 
 (defmacro get-bytes-as-uint (packet value bytes)
+  "Fetch BYTES bytes from PACKET into some unsigned-int called VALUE."
   (let ((pkt (gensym "PKT-")))
     `(let ((,value 0)
 	   (,pkt ,packet))
@@ -112,6 +119,7 @@
 
 ;;; help build integer serialize/unserialize methods
 (defmacro make-uint-serializer (key bytes)
+  "Make SERIALIZE/UNSERIALIZE methods for an unsigned-int of BYTES bytes in length dispatched by KEY."
   `(progn
      (defmethod serialize (packet (type (eql ,key)) value)
        (declare (type packet packet)
@@ -123,6 +131,7 @@
 		(ignore type))
        (get-bytes-as-uint packet value ,bytes))))
 
+;;; define standard unsigned-int serialize/deserialize methods
 (make-uint-serializer :uint8  1)
 (make-uint-serializer :uint16 2)
 (make-uint-serializer :uint24 3)
@@ -132,6 +141,7 @@
 
 ;;; signed-int serialization helper
 (defmacro make-int-serializer (key bytes)
+  "Make SERIALIZE/UNSERIALIZE methods for a signed-int of BYTES bytes in length dispatched by KEY."
   `(progn
      (defmethod serialize (packet (type (eql ,key)) value)
        (declare (type packet packet)
@@ -151,6 +161,7 @@
 	   (declare (type (signed-byte ,(* bytes 8)) vv))
 	   (values vv packet))))))
 
+;;; define standard signed-int serialize/deserialize methods
 (make-int-serializer :int8  1)
 (make-int-serializer :int16 2)
 (make-int-serializer :int32 4)
@@ -158,6 +169,7 @@
 
 ;;; floating-point type helper
 (defmacro make-float-serializer (key type bytes encoder decoder)
+  "XXX"
   `(progn
      (defmethod serialize (packet (type (eql ,key)) value)
        (declare (type packet packet)
@@ -248,7 +260,7 @@
 	     (values value packet)))))))
 
 (defmacro make-bitfield-serializer (type (&rest choices))
-  (let ((bytes (nth-value 0 (ceiling (length choices) 256))))
+  (let ((bytes (nth-value 0 (ceiling (length choices) 8))))
     `(progn
        (defmethod serialize (packet (type (eql ,type)) (value cons))
 	 (declare (type packet packet)
