@@ -1,8 +1,8 @@
 
-(in-package :unet-tests)
+(in-package :userial-tests)
 
-(defun serialize-unserialize (tag value &optional (packet-size 64))
-  (nth-value 0 (unserialize (rewind-packet (serialize (make-packet packet-size)
+(defun serialize-unserialize (tag value &optional (buffer-size 64))
+  (nth-value 0 (unserialize (rewind-buffer (serialize (make-buffer buffer-size)
 						      tag
 						      value))
 			    tag)))
@@ -45,27 +45,27 @@
 
 (nst:def-test-group test-enum/bitfield-serializing ()
   (nst:def-test serialize-alpha-enum (:array-equalp (1 13 26))
-    (serialize (serialize (serialize (make-packet 4) :alphas :a)
+    (serialize (serialize (serialize (make-buffer 4) :alphas :a)
 			  :alphas :m)
 	       :alphas :z))
   (nst:def-test serialize-colors-bitfield (:array-equalp (0 1  1 2  1 255))
-    (serialize (serialize (serialize (make-packet 6) :colors :red)
+    (serialize (serialize (serialize (make-buffer 6) :colors :red)
 			  :colors '(:orange :black))
 	       :colors '(:red :orange :yellow :green :blue :indigo
 			 :violet :white :black))))
 
 (nst:def-test-group test-serialize* ()
   (nst:def-test serialize-uint8 (:array-equalp (0 255 1 128))
-    (serialize* (:uint8 0 :uint8 255 :uint8 1 :uint8 128) (make-packet 4)))
+    (serialize* (:uint8 0 :uint8 255 :uint8 1 :uint8 128) (make-buffer 4)))
   (nst:def-test serialize-int8 (:array-equalp (128 129 127 255 0))
     (serialize* (:int8 0 :int8 1 :int8 -1 :int8 127 :int8 -128)
-		(make-packet 5)))
+		(make-buffer 5)))
   (nst:def-test serialize-uint16 (:array-equalp (0 0  1 0  4 163  255 255))
     (serialize* (:uint16 0 :uint16 256 :uint16 1187 :uint16 65535)
-		(make-packet 8)))
+		(make-buffer 8)))
   (nst:def-test serialize-int16 (:array-equalp (128   0    128   1     127 255
                                                 129   0    127   0
 						255 255      0   0))
     (serialize* (:int16 0 :int16 1 :int16 -1
 		 :int16 256 :int16 -256
-		 :int16 32767 :int16 -32768) (make-packet 14))))
+		 :int16 32767 :int16 -32768) (make-buffer 14))))
