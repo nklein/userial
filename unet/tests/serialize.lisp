@@ -1,11 +1,6 @@
 
 (in-package :unet-tests)
 
-(nst:def-criterion-alias (:array-equalp bytes)
-    `(:equalp ,(make-array (list (length bytes))
-			   :element-type '(unsigned-byte 8)
-			   :initial-contents bytes)))
-
 (defun serialize-unserialize (tag value &optional (packet-size 64))
   (nth-value 0 (unserialize (rewind-packet (serialize (make-packet packet-size)
 						      tag
@@ -37,6 +32,27 @@
   (nst:def-test serialize-int32 (:sample-ints :int32 -2147483648 2147483647))
   (nst:def-test serialize-int64 (:sample-ints :int64 -9223372036854775808
 					              9223372036854775807)))
+
+(nst:def-criterion-alias (:array-equalp bytes)
+    `(:equalp ,(make-array (list (length bytes))
+			   :element-type '(unsigned-byte 8)
+			   :initial-contents bytes)))
+
+(make-enum-serializer     :alphas (:a :b :c :d :e :f :g :h :i :j :k :l :m
+				   :n :o :p :q :r :s :t :u :v :w :x :y :z))
+(make-bitfield-serializer :colors (:red :orange :yellow :green :blue
+				   :indigo :violet :white :black))
+
+(nst:def-test-group test-enum/bitfield-serializing ()
+  (nst:def-test serialize-alpha-enum (:array-equalp (1 13 26))
+    (serialize (serialize (serialize (make-packet 4) :alphas :a)
+			  :alphas :m)
+	       :alphas :z))
+  (nst:def-test serialize-colors-bitfield (:array-equalp (0 1  1 2  1 255))
+    (serialize (serialize (serialize (make-packet 6) :colors :red)
+			  :colors '(:orange :black))
+	       :colors '(:red :orange :yellow :green :blue :indigo
+			 :violet :white :black))))
 
 (nst:def-test-group test-serialize* ()
   (nst:def-test serialize-uint8 (:array-equalp (0 255 1 128))
