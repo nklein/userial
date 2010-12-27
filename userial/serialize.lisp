@@ -169,7 +169,7 @@
 
 ;;; floating-point type helper
 (defmacro make-float-serializer (key type bytes encoder decoder)
-  "XXX"
+  "Make serialize/unserialize routines for floating-point type TYPE dispatched by KEY with the given number of BYTES and an ENCODER/DECODER pair."
   `(progn
      (defmethod serialize (buffer (type (eql ,key)) value)
        (declare (type buffer buffer)
@@ -195,6 +195,7 @@
 
 ;;; raw byte arrays
 (defmethod serialize (buffer (type (eql :bytes)) value)
+  "Serialize the raw bytes in the VALUE array into BUFFER"
   (declare (type buffer buffer)
 	   (ignore type)
 	   (type (vector (unsigned-byte 8)) value))
@@ -206,6 +207,7 @@
     buffer))
 
 (defmethod unserialize (buffer (type (eql :bytes)))
+  "Unserialize a raw array of bytes from a BUFFER"
   (declare (type buffer buffer)
 	   (ignore type))
   (multiple-value-bind (length buffer) (unserialize buffer :uint16)
@@ -219,12 +221,14 @@
 
 ;;; string handling
 (defmethod serialize (buffer (type (eql :string)) value)
+  "Serialize a string from VALUE into the BUFFER"
   (declare (type buffer buffer)
 	   (ignore type)
 	   (type string value))
   (serialize buffer :bytes (trivial-utf-8:string-to-utf-8-bytes value)))
 
 (defmethod unserialize (buffer (type (eql :string)))
+  "Unserialize a string from a BUFFER"
   (declare (type buffer buffer)
 	   (ignore type))
   (multiple-value-bind (value buffer)
@@ -235,8 +239,15 @@
 
 ;;; enum helper
 (defmacro make-enum-serializer (type (&rest choices))
+  "Create serialize/unserialize methods keyed by TYPE where the possible values are given by CHOICES"
   (let ((bytes (nth-value 0 (ceiling (log (1+ (length choices)) 256)))))
     `(progn
+       (defmethod serialize (buffer (type (eql ,type)) (value (eql nil)))
+	 (declare (type buffer buffer)
+		  (ignore type value))
+	 (let ((value 0))
+	   (declare (type (unsigned-byte ,(* bytes 8)) value))
+	   (add-bytes-from-uint buffer value ,bytes)))
        (defmethod serialize (buffer (type (eql ,type)) value)
 	 (declare (type buffer buffer)
 		  (ignore type)
@@ -260,6 +271,7 @@
 	     (values value buffer)))))))
 
 (defmacro make-bitfield-serializer (type (&rest choices))
+  "Create serialize/unserialize methods keyed by TYPE where the CHOICES can either be specified singly or as a list."
   (let ((bytes (nth-value 0 (ceiling (length choices) 8))))
     `(progn
        (defmethod serialize (buffer (type (eql ,type)) (value cons))

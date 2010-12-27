@@ -1,49 +1,67 @@
 
 (in-package :userial-tests)
 
+;;; helper function that serializes and then unserializes a value
 (defun serialize-unserialize (tag value &optional (buffer-size 64))
+  "Returns the value obtained from unserializing disptached by TAG on the result of rewinding a buffer of BUFFER-SIZE bytes that had VALUE serialized into it dispatched by TAG.  The hope is that the returned value will be equal to VALUE."
   (nth-value 0 (unserialize (rewind-buffer (serialize (make-buffer buffer-size)
 						      tag
 						      value))
 			    tag)))
 
-(nst:def-arbitrary-instance-type (bounded-integer :scalar t
-						  :key ((low 0) (high 0)))
+;;; an instance type of bounded arbitrary integers
+(nst:def-arbitrary-instance-type (bounded-integer :key ((low 0) (high 1)))
   (assert (< low high))
   (+ (rem (abs (nst:arbitrary 'integer)) (max (- high low) 1)) low))
 
+;;; criterion to check that we can unserialize a serialized a bounded int
 (nst:def-criterion-alias (:sample-ints tag low high)
     `(:sample :sample-size 32
 	      :domains ((x (bounded-integer :low ,low :high ,high)))
 	      :verify (= x (serialize-unserialize ,tag x))))
 
+;;; criterion to check that we can unserialize a serialized strings
+(nst:def-criterion-alias (:sample-strings tag)
+    `(:sample :sample-size 32
+	      :domains ((x string))
+	      :verify (equal x (serialize-unserialize ,tag x))))
+
+;;; test various unsigned integer encode/decode routines
 (nst:def-test-group test-uint-serializing ()
-  (nst:def-test serialize-uint8  (:sample-ints :uint8  0 255))
-  (nst:def-test serialize-uint16 (:sample-ints :uint16 0 65535))
-  (nst:def-test serialize-uint24 (:sample-ints :uint24 0 16777215))
-  (nst:def-test serialize-uint32 (:sample-ints :uint32 0 4294967295))
-  (nst:def-test serialize-uint48 (:sample-ints :uint48 0 281474976710655))
-  (nst:def-test serialize-uint64 (:sample-ints :uint64 0 18446744073709551615))
+  (:documentation "Test the various standard unsigned-int serialize/unserialize routines.")
+  (nst:def-test serialize-uint8  (:sample-ints :uint8  0 256))
+  (nst:def-test serialize-uint16 (:sample-ints :uint16 0 65536))
+  (nst:def-test serialize-uint24 (:sample-ints :uint24 0 16777216))
+  (nst:def-test serialize-uint32 (:sample-ints :uint32 0 4294967296))
+  (nst:def-test serialize-uint48 (:sample-ints :uint48 0 281474976710656))
+  (nst:def-test serialize-uint64 (:sample-ints :uint64 0 18446744073709551616))
 )
 
+;;; test various signed integer encode/decode routines
 (nst:def-test-group test-int-serializing ()
-  (nst:def-test serialize-int8  (:sample-ints :int8  -128 127))
-  (nst:def-test serialize-int16 (:sample-ints :int16 -32768 32767))
-  (nst:def-test serialize-int32 (:sample-ints :int32 -2147483648 2147483647))
+  (:documentation "Test the various standard signed-int serialize/unserialize routines.")
+  (nst:def-test serialize-int8  (:sample-ints :int8  -128 128))
+  (nst:def-test serialize-int16 (:sample-ints :int16 -32768 32768))
+  (nst:def-test serialize-int32 (:sample-ints :int32 -2147483648 2147483648))
   (nst:def-test serialize-int64 (:sample-ints :int64 -9223372036854775808
-					              9223372036854775807)))
+					              9223372036854775808)))
 
+;;; define a criterion that makes sure the test-form is an array of
+;;; unsigned bytes that are equal to the given list of bytes
 (nst:def-criterion-alias (:array-equalp bytes)
     `(:equalp ,(make-array (list (length bytes))
 			   :element-type '(unsigned-byte 8)
 			   :initial-contents bytes)))
 
+;;; prepare an enum and bitfield type for testing
 (make-enum-serializer     :alphas (:a :b :c :d :e :f :g :h :i :j :k :l :m
 				   :n :o :p :q :r :s :t :u :v :w :x :y :z))
 (make-bitfield-serializer :colors (:red :orange :yellow :green :blue
 				   :indigo :violet :white :black))
 
+;;; verify that the enums and bitfields serialize as expected
 (nst:def-test-group test-enum/bitfield-serializing ()
+  (:documentation "Verify that the ENUM and BITFIELD serializes serialize as expected.")
   (nst:def-test serialize-alpha-enum (:array-equalp (1 13 26))
     (serialize (serialize (serialize (make-buffer 4) :alphas :a)
 			  :alphas :m)
@@ -54,6 +72,24 @@
 	       :colors '(:red :orange :yellow :green :blue :indigo
 			 :violet :white :black))))
 
+;;; check that strings and raw-byte arrays encode as expected
+(nst:def-test-group test-string-and-byte-serializing ()
+  (:documentation "Test that strings and raw-byte arrays serialize as expected")
+  (nst:def-test serialize-ascii-string (:array-equalp (0 3 70 111 111))
+    (serialize (make-buffer 5) :string "Foo"))
+  (nst:def-test serialize-utf8-string (:array-equalp (0 5 70 111 226 152 186))
+    (serialize (make-buffer 7) :string "Fo☺"))
+  (nst:def-test serialize-byte-array (:array-equalp (0 5 0 3 70 111 111))
+    (serialize (make-buffer 7) :bytes (serialize (make-buffer 5)
+						 :string "Foo")))
+  #+does-not-work-yet (nst:def-test serialize-unserialize-strings
+			  (:sample-strings :string))
+  (nst:def-test unserialize-ascii-string (:equal "Foo")
+    (serialize-unserialize :string "Foo"))
+  (nst:def-test unserialize-utf8-string (:equal "Fo☺")
+    (serialize-unserialize :string "Fo☺")))
+
+;;; test serializing sequences of things
 (nst:def-test-group test-serialize* ()
   (nst:def-test serialize-uint8 (:array-equalp (0 255 1 128))
     (serialize* (:uint8 0 :uint8 255 :uint8 1 :uint8 128) (make-buffer 4)))

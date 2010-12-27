@@ -9,5 +9,5 @@
 		:components ((:module "tests"
 			      :serial t
 			      :components ((:file "package")
-					   (:file "packet")
+					   (:file "buffer")
 					   (:file "serialize")))))))
