@@ -105,3 +105,27 @@
     (serialize* (:int16 0 :int16 1 :int16 -1
 		 :int16 256 :int16 -256
 		 :int16 32767 :int16 -32768) (make-buffer 14))))
+
+;;; prepare a buffer for testing unserializing
+(nst:def-fixtures unserialize-buffers
+    (:documentation "Prepare some buffers for unserializing")
+  (buffer (rewind-buffer (serialize* (:int16 -1187 :string "Foo"
+				      :uint8 3 :uint16 2178)
+				     (make-buffer 64)))))
+
+;;; test various methods of unserializing things
+(nst:def-test-group test-unserialize-techniques (unserialize-buffers)
+  (nst:def-test test-unserialize* (:equalp '((-1187 "Foo") 3 2178))
+    (let ((a (list nil nil))
+	  b
+	  c)
+      (nth-value 0
+		 (unserialize* (:int16 (first a) :string (second a)
+			        :uint8 b :uint16 c) buffer
+		   (list a b c)))))
+  (nst:def-test test-unserialize-let* (:equalp '(-1187 "Foo" 3 2178))
+    (nth-value 0 (unserialize-let* (:int16 a :string b :uint8 c :uint16 d)
+		     buffer
+		   (list a b c d))))
+  (nst:def-test test-unserialize-list* (:equalp '(-1187 "Foo" 3 2178))
+    (nth-value 0 (unserialize-list* '(:int16 :string :uint8 :uint16) buffer))))
