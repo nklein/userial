@@ -7,10 +7,10 @@
   '(and (array (unsigned-byte 8) (*)) (not simple-array)))
 
 ;;; make-buffer function
-(declaim (ftype (function (&optional (integer 4 *)) buffer) make-buffer))
+(declaim (ftype (function (&optional (integer 1 *)) buffer) make-buffer))
 (defun make-buffer (&optional (max-length 32768))
   "Create an empty BUFFER of a given MAX-LENGTH"
-  (declare (type (integer 4 *) max-length))
+  (declare (type (integer 1 *) max-length))
   (let ((buffer (make-array (list max-length)
 			    :element-type '(unsigned-byte 8)
 			    :initial-element 0
