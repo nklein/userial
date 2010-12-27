@@ -28,6 +28,8 @@
 	(pk (gensym "PKT-")))
     `(multiple-value-bind (,pp ,pk)
 	 (unserialize ,buffer ,type)
+       ,(unless rest
+		`(declare (ignore ,pk)))
        (setf ,place ,pp)
        ,@(if rest
 	    `((unserialize* ,rest ,pk ,@body))
