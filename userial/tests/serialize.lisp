@@ -121,8 +121,8 @@
 	  c)
       (nth-value 0
 		 (unserialize* (:int16 (first a) :string (second a)
-			        :uint8 b :uint16 c) buffer
-		   (list a b c)))))
+			        :uint8 b :uint16 c) buffer))
+      (list a b c)))
   (nst:def-test test-unserialize-let* (:equalp '(-1187 "Foo" 3 2178))
     (nth-value 0 (unserialize-let* (:int16 a :string b :uint8 c :uint16 d)
 		     buffer

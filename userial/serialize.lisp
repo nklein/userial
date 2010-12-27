@@ -22,7 +22,7 @@
       `(serialize* ,rest (serialize ,buffer ,type ,value))
       `(serialize ,buffer ,type ,value)))
 
-(defmacro unserialize* ((type place &rest rest) buffer &body body)
+(defmacro unserialize* ((type place &rest rest) buffer)
   "UNSERIALIZE a list of TYPE + PLACE from the given BUFFER and execute the body.  For example:  (LET (AA BB) (UNSERIALIZE* (:UINT8 AA :INT16 BB) BUFFER (LIST AA BB)))"
   (let ((pp (gensym "PLACE-"))
 	(pk (gensym "PKT-")))
@@ -31,9 +31,8 @@
        ,(unless rest
 		`(declare (ignore ,pk)))
        (setf ,place ,pp)
-       ,@(if rest
-	    `((unserialize* ,rest ,pk ,@body))
-	    body))))
+       ,(when rest
+	    `(unserialize* ,rest ,pk)))))
 
 (defmacro unserialize-let* ((type var &rest rest) buffer &body body)
   "UNSERIALIZE a list of TYPE + VARIABLE-NAME from the given BUFFER and execute the body.  For example:  (UNSERIALIZE-LET* (:UINT8 AA :INT16 BB) BUFFER (LIST AA BB))"
