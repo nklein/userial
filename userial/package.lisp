@@ -1,16 +1,21 @@
 
 (defpackage :userial
   (:use :cl)
-  (:export :make-buffer
-	   :make-displaced-buffer
+  (:export *buffer*
+           :make-buffer
+	   :buffer-length
+	   :buffer-capacity
+	   :buffer-advance
+	   :buffer-add-byte
+	   :buffer-get-byte
+	   :buffer-rewind
+	   :unroll-add-bytes
+	   :unroll-get-bytes
 	   :make-bitfield-serializer
 	   :make-enum-serializer
 	   :make-float-serializer
 	   :make-int-serializer
 	   :make-uint-serializer
-	   :add-bytes-from-uint
-	   :get-bytes-as-uint
-	   :rewind-buffer
 	   :serialize
 	   :serialize*
 	   :unserialize

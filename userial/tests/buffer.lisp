@@ -27,39 +27,30 @@
       (:each (:apply array-element-type
 		     (:equalp '(unsigned-byte 8)))) base-buffers))
 
-;;; prepare some buffers displaced into other buffers
-(nst:def-fixtures displaced-buffers
-    (:uses simple-buffers
-     :documentation "Prepare some buffers displaced into other buffers")
-  (small-0 (make-displaced-buffer small))
-  (small-5 (make-displaced-buffer small 5))
-  (small-displaced (list small-0 small-5))
-  (rewound-smalls (mapcar #'rewind-buffer small-displaced)))
+;;; prepare a criterion that checks the length of a given array
+(nst:def-criterion-alias (:length-is nn)
+    `(:apply buffer-length (:eql ,nn)))
 
-;;; prepare a criterion that checks the displacement of a given array
-(nst:def-criterion-alias (:displacement-is array offset)
-    `(:apply (lambda (a) (multiple-value-list (array-displacement a)))
-	     (:seq (:eq ,array) (:eql ,offset))))
+;;; prepare a criterion that checks the length of a given array
+(nst:def-criterion-alias (:capacity-is nn)
+    `(:apply buffer-capacity (:eql ,nn)))
 
-;;; prepare a criterion that checks the fill-pointer of a given array
-(nst:def-criterion-alias (:fill-pointer-is nn)
-    `(:apply fill-pointer (:eql ,nn)))
-
-;;; tests of buffers displaced into other buffers
-(nst:def-test-group displaced-buffer-construction (simple-buffers
-						   displaced-buffers)
-  (:documentation "Test construction of buffers displaced into other buffers")
-  (nst:def-test displaced-to-small (:each (:displacement-is small 0))
-    small-displaced)
-  (nst:def-test fill-pointer-is-right (:seq (:fill-pointer-is 0)
-					    (:fill-pointer-is 5))
-    small-displaced))
-
-;;; tests of buffers that have been rewound
-(nst:def-test-group rewound-buffer-tests (simple-buffers displaced-buffers)
-  (:documentation "Test results of rewinding buffers")
-  (nst:def-test displaced-to-small (:seq (:displacement-is small-0 0)
-					 (:displacement-is small-5 0))
-    rewound-smalls)
-  (nst:def-test fill-pointer-is-right (:each (:fill-pointer-is 0))
-    rewound-smalls))
+(nst:def-test-group buffer-information (simple-buffers)
+  (:documentation "Test querying of buffer properties")
+  (nst:def-test length-right (:seq (:length-is 0)
+				   (:length-is 0)
+				   (:length-is 0))
+    base-buffers)
+  (nst:def-test capacity-right (:seq (:capacity-is 10)
+				     (:capacity-is 1024)
+				     (:capacity-is 32768))
+    base-buffers)
+  (nst:def-test advance-works (:seq (:length-is 512)
+				    (:length-is 512)
+				    (:length-is 512))
+    (dolist (buf base-buffers base-buffers)
+      (buffer-advance 512 buf)))
+  (nst:def-test rewind-works (:seq (:length-is 0)
+				   (:length-is 0)
+				   (:length-is 0))
+    (mapcar #'buffer-rewind base-buffers)))

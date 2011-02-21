@@ -4,10 +4,11 @@
 ;;; helper function that serializes and then unserializes a value
 (defun serialize-unserialize (tag value &optional (buffer-size 64))
   "Returns the value obtained from unserializing disptached by TAG on the result of rewinding a buffer of BUFFER-SIZE bytes that had VALUE serialized into it dispatched by TAG.  The hope is that the returned value will be equal to VALUE."
-  (nth-value 0 (unserialize (rewind-buffer (serialize (make-buffer buffer-size)
-						      tag
-						      value))
-			    tag)))
+  (nth-value 0
+	     (unserialize tag
+			  (buffer-rewind
+			    (serialize tag value
+				       (make-buffer buffer-size))))))
 
 ;;; an instance type of bounded arbitrary integers
 (nst:def-arbitrary-instance-type (bounded-integer :key ((low 0) (high 1)))
@@ -63,25 +64,28 @@
 (nst:def-test-group test-enum/bitfield-serializing ()
   (:documentation "Verify that the ENUM and BITFIELD serializes serialize as expected.")
   (nst:def-test serialize-alpha-enum (:array-equalp (1 13 26))
-    (serialize (serialize (serialize (make-buffer 4) :alphas :a)
-			  :alphas :m)
-	       :alphas :z))
-  (nst:def-test serialize-colors-bitfield (:array-equalp (0 1  1 2  1 255))
-    (serialize (serialize (serialize (make-buffer 6) :colors :red)
-			  :colors '(:orange :black))
-	       :colors '(:red :orange :yellow :green :blue :indigo
-			 :violet :white :black))))
+    (serialize :alphas :z
+	       (serialize :alphas :m
+			  (serialize :alphas :a (make-buffer 4)))))
+  (nst:def-test serialize-colors-bitfield (:array-equalp (0 0 0 1 1 2 1 255))
+    (serialize :colors '(:red :orange :yellow :green :blue :indigo
+			 :violet :white :black)
+	       (serialize :colors '(:orange :black)
+			  (serialize :colors :red
+				     (serialize :colors nil
+						(make-buffer 8)))))))
 
 ;;; check that strings and raw-byte arrays encode as expected
 (nst:def-test-group test-string-and-byte-serializing ()
-  (:documentation "Test that strings and raw-byte arrays serialize as expected")
+  (:documentation "Test that strings and raw-byte arrays serialize
+                   as expected")
   (nst:def-test serialize-ascii-string (:array-equalp (0 3 70 111 111))
-    (serialize (make-buffer 5) :string "Foo"))
+    (serialize :string "Foo" (make-buffer 5)))
   (nst:def-test serialize-utf8-string (:array-equalp (0 5 70 111 226 152 186))
-    (serialize (make-buffer 7) :string "Fo☺"))
+    (serialize :string "Fo☺" (make-buffer 7)))
   (nst:def-test serialize-byte-array (:array-equalp (0 5 0 3 70 111 111))
-    (serialize (make-buffer 7) :bytes (serialize (make-buffer 5)
-						 :string "Foo")))
+    (serialize :bytes (serialize :string "Foo" (make-buffer 5))
+	       (make-buffer 7)))
   #+does-not-work-yet (nst:def-test serialize-unserialize-strings
 			  (:sample-strings :string))
   (nst:def-test unserialize-ascii-string (:equal "Foo")
@@ -109,7 +113,7 @@
 ;;; prepare a buffer for testing unserializing
 (nst:def-fixtures unserialize-buffers
     (:documentation "Prepare some buffers for unserializing")
-  (buffer (rewind-buffer (serialize* (:int16 -1187 :string "Foo"
+  (buffer (buffer-rewind (serialize* (:int16 -1187 :string "Foo"
 				      :uint8 3 :uint16 2178)
 				     (make-buffer 64)))))
 
@@ -121,11 +125,12 @@
 	  c)
       (nth-value 0
 		 (unserialize* (:int16 (first a) :string (second a)
-			        :uint8 b :uint16 c) buffer))
+			        :uint8 b :uint16 c) (buffer-rewind buffer)))
       (list a b c)))
   (nst:def-test test-unserialize-let* (:equalp '(-1187 "Foo" 3 2178))
     (nth-value 0 (unserialize-let* (:int16 a :string b :uint8 c :uint16 d)
-		     buffer
+		     (buffer-rewind buffer)
 		   (list a b c d))))
   (nst:def-test test-unserialize-list* (:equalp '(-1187 "Foo" 3 2178))
-    (nth-value 0 (unserialize-list* '(:int16 :string :uint8 :uint16) buffer))))
+    (nth-value 0 (unserialize-list* '(:int16 :string :uint8 :uint16)
+                                    (buffer-rewind buffer)))))
