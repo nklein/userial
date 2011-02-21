@@ -81,6 +81,7 @@
                    as expected")
   (nst:def-test serialize-ascii-string (:array-equalp (0 3 70 111 111))
     (serialize :string "Foo" (make-buffer 5)))
+  #+sbcl
   (nst:def-test serialize-utf8-string (:array-equalp (0 5 70 111 226 152 186))
     (serialize :string "Fo☺" (make-buffer 7)))
   (nst:def-test serialize-byte-array (:array-equalp (0 5 0 3 70 111 111))
@@ -90,6 +91,7 @@
 			  (:sample-strings :string))
   (nst:def-test unserialize-ascii-string (:equal "Foo")
     (serialize-unserialize :string "Foo"))
+  #+sbcl
   (nst:def-test unserialize-utf8-string (:equal "Fo☺")
     (serialize-unserialize :string "Fo☺")))
 
