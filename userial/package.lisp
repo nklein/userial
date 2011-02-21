@@ -3,6 +3,7 @@
   (:use :cl)
   (:export *buffer*
            :make-buffer
+	   :with-buffer
 	   :buffer-length
 	   :buffer-capacity
 	   :buffer-advance
@@ -16,6 +17,8 @@
 	   :make-float-serializer
 	   :make-int-serializer
 	   :make-uint-serializer
+	   :make-slot-serializer
+	   :make-accessor-serializer
 	   :serialize
 	   :serialize*
 	   :unserialize

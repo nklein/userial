@@ -1,6 +1,8 @@
 
 (in-package :userial)
 
+(declaim (optimize (speed 3)))
+
 ;;; serialize generic function
 (defgeneric serialize (type value &optional buffer)
   (:documentation "Method used to serialize a VALUE of given TYPE into BUFFER")
@@ -245,3 +247,80 @@
 		       :when (plusp (logand value (expt 2 ii)))
 		          :collect (svref (vector ,@choices) ii))
 		 buffer))))))
+
+(defmacro make-slot-serializer (type factory (&rest fields))
+  "Make a serialize/unserialize pair with given TYPE using the FACTORY
+   form when a new instance is needed where FIELDS is a list of
+   key/slot values.  For example:
+      (defstruct person name (age 0))
+      (make-slot-serializer :person (make-person) (:string name :uint8 age))"
+  (labels ((get-types-and-slots (fields &optional types slots)
+	     (cond
+	       ((null fields) (values (nreverse types) (nreverse slots)))
+	       ((null (rest fields))
+		  (error "Expected same number of TYPEs as SLOTs"))
+	       (t (get-types-and-slots (rest (rest fields))
+				       (cons (first fields) types)
+				       (cons (second fields) slots))))))
+    (multiple-value-bind (types slots) (get-types-and-slots fields)
+      (let ((obj-sym (gensym "OBJ-")))
+	`(progn
+	   (defmethod serialize ((type (eql ,type)) value
+				 &optional (buffer *buffer*))
+	     (with-slots ,slots value
+	       ,@(mapcar #'(lambda (type slot)
+			     `(serialize ,type ,slot buffer))
+			 types slots))
+	     buffer)
+	   (defmethod unserialize ((type (eql ,type))
+				   &optional (buffer *buffer*))
+	     (let ((,obj-sym ,factory))
+	       (with-slots ,slots ,obj-sym
+		 ,@(mapcar #'(lambda (type slot)
+			       `(setf ,slot (unserialize ,type buffer)))
+			   types slots))
+	       (values ,obj-sym buffer))))))))
+
+(defmacro make-accessor-serializer (type factory (&rest fields))
+  "Make a serialize/unserialize pair with given TYPE using the FACTORY
+   form when a new instance is needed where FIELDS is a list of
+   key/accessor values.  For example:
+      (defstruct person name (age 0))
+      (make-slot-serializer :person (make-person)
+                                    (:string person-name :uint8 person-age))"
+  (labels ((get-types-and-accessors (fields &optional types slots syms)
+	     (cond
+	       ((null fields) (values (nreverse types)
+				      (nreverse slots)
+				      (nreverse syms)))
+	       ((null (rest fields))
+		  (error "Expected same number of TYPEs as SLOTs"))
+	       (t (get-types-and-accessors (rest (rest fields))
+					   (cons (first fields) types)
+					   (cons (second fields) slots)
+					   (cons (gensym "ACC-") syms))))))
+    (multiple-value-bind (types accessors syms)
+	(get-types-and-accessors fields)
+      (let ((obj-sym (gensym "OBJ-")))
+	`(progn
+	   (defmethod serialize ((type (eql ,type)) value
+				 &optional (buffer *buffer*))
+	     (with-accessors ,(mapcar #'(lambda (sym accessor)
+					  `(,sym ,accessor))
+				      syms accessors)
+		 value
+	       ,@(mapcar #'(lambda (type sym)
+			     `(serialize ,type ,sym buffer))
+			 types syms))
+	     buffer)
+	   (defmethod unserialize ((type (eql ,type))
+				   &optional (buffer *buffer*))
+	     (let ((,obj-sym ,factory))
+	       (with-accessors ,(mapcar #'(lambda (sym accessor)
+					    `(,sym ,accessor))
+					syms accessors)
+		   ,obj-sym
+		 ,@(mapcar #'(lambda (type sym)
+			       `(setf ,sym (unserialize ,type buffer)))
+			   types syms))
+	       (values ,obj-sym buffer))))))))

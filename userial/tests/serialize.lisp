@@ -110,6 +110,43 @@
 		 :int16 256 :int16 -256
 		 :int16 32767 :int16 -32768) (make-buffer 14))))
 
+;;; test slot and accessor serializing
+(defstruct person
+  name
+  initial
+  age)
+
+(make-slot-serializer :person-private
+		      (make-person :name "(Unknown)"
+				   :initial "(Unknown)"
+				   :age "(Unknown)")
+		      (:string name :alphas initial :uint8 age))
+
+(make-accessor-serializer :person-public
+			  (make-person :name "(Unknown)"
+				       :initial "(Unknown)"
+				       :age "(Unknown)")
+			  (:string person-name :alphas person-initial))
+
+(nst:def-fixtures sample-people
+  (:documentation "Prepare some sample people")
+  (alice (make-person :name "Alice" :initial :a :age 31))
+  (bob   (make-person :name "Bob" :initial :b :age 40))
+  (carol (make-person :name "Carol" :initial :c  :age 37)))
+
+(nst:def-test-group test-slot-and-accessor-serializers (sample-people)
+  (nst:def-test test-private-slot-serializer (:seq (:equalp alice)
+						   (:equalp bob)
+						   (:equalp carol))
+    (list (serialize-unserialize :person-private alice)
+	  (serialize-unserialize :person-private bob)
+	  (serialize-unserialize :person-private carol)))
+  (nst:def-test test-public-slot-serializer (:seq (:equalp "Alice")
+						  (:eql :a)
+						  (:not (:equalp alice)))
+    (let ((rr (serialize-unserialize :person-public alice)))
+      (list (person-name rr) (person-initial rr) rr))))
+
 ;;; prepare a buffer for testing unserializing
 (nst:def-fixtures unserialize-buffers
     (:documentation "Prepare some buffers for unserializing")

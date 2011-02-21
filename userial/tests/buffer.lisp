@@ -53,4 +53,15 @@
   (nst:def-test rewind-works (:seq (:length-is 0)
 				   (:length-is 0)
 				   (:length-is 0))
-    (mapcar #'buffer-rewind base-buffers)))
+    (mapcar #'buffer-rewind base-buffers))
+  (nst:def-test with-buffer-works (:seq (:eql 0)
+					(:eql 10)
+					(:eql 32))
+    (with-buffer (make-buffer 10)
+      (let* ((a (nth-value 0 (buffer-length)))
+	     (b (nth-value 0 (buffer-capacity))))
+	(buffer-advance 32)
+	(list a b (nth-value 0 (buffer-length)))))))
+		    
+
+	  

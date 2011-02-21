@@ -1,6 +1,8 @@
 
 (in-package :userial)
 
+(declaim (optimize (speed 3)))
+
 (deftype uchar () '(unsigned-byte 8))
 (deftype uint  () '(integer 0 *))
 (deftype buffer ()
@@ -26,6 +28,11 @@
 	 (type buffer buffer))
 (defvar *buffer* (make-buffer))
 
+(defmacro with-buffer (buffer &body body)
+  "Macro to do a BODY of statements with the given BUFFER as default."
+  `(let ((userial:*buffer* ,buffer))
+     ,@body))
+
 (declaim (inline buffer-length)
 	 (ftype (function (&optional buffer) uint) buffer-length))
 (defun buffer-length (&optional (buffer *buffer*))
@@ -46,9 +53,9 @@
   "Sets the capacity of the BUFFER to NEW-CAPACITY"
   (declare (type buffer buffer)
 	   (type uint new-capacity))
-  (setf *buffer* (adjust-array buffer (list new-capacity)
-			       :fill-pointer
-			       (min (fill-pointer buffer) new-capacity))))
+  (adjust-array buffer (list new-capacity)
+		:fill-pointer
+		(min (fill-pointer buffer) new-capacity)))
 
 (declaim (ftype (function (&optional uint buffer) buffer)
 		buffer-expand-if-needed))
@@ -60,7 +67,7 @@
       (setf (buffer-capacity buffer)
 	    (max needs-to-be (min (* capacity 2)
 				  (+ capacity +default-buffer-expand+))))))
-  (setf *buffer* buffer))
+  buffer)
 
 (declaim (inline buffer-advance)
 	 (ftype (function (&optional uint buffer) buffer) buffer-advance))
