@@ -30,7 +30,7 @@
 
 (defmacro with-buffer (buffer &body body)
   "Macro to do a BODY of statements with the given BUFFER as default."
-  `(let ((userial:*buffer* ,buffer))
+  `(let ((userial::*buffer* ,buffer))
      ,@body))
 
 (declaim (inline buffer-length)

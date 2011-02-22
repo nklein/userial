@@ -1,7 +1,7 @@
 
 (defpackage :userial
   (:use :cl)
-  (:export *buffer*
+  (:export :buffer
            :make-buffer
 	   :with-buffer
 	   :buffer-length
@@ -10,8 +10,6 @@
 	   :buffer-add-byte
 	   :buffer-get-byte
 	   :buffer-rewind
-	   :unroll-add-bytes
-	   :unroll-get-bytes
 	   :make-bitfield-serializer
 	   :make-enum-serializer
 	   :make-float-serializer

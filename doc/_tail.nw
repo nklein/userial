@@ -1,0 +1,6 @@
+% -*- mode: Noweb; noweb-code-mode: lisp-mode -*-
+@
+\twocolumn
+\section*{Index}
+\nowebindex
+\end{document}
