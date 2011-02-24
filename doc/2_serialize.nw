@@ -2,4 +2,141 @@
 @
 \section{Serializing and Unserializing}
 
-Blah, and blah.
+The ultimate purpose of the \userial library is to allow one to
+serialize and unserialize data.  To this end, the library defines two
+generic functions that dispatch on a keyword parameter.  These generic
+functions are described in \S\ref{api:serialize} below.
+
+There are some macros that facilitate serializing and unserializing
+sequences of items.  These macros are described in \S\ref{api:serialize*}
+below.
+
+\subsection{Serialize and Unserialize Generics}
+\S\ref{api:serialize}
+
+The generic function used to serialize items takes a keyword
+as its first parameter, a value as its second parameter, and
+an optional buffer.  The keyword is used to dispatch the
+appropriate implementation of the function for the given value.
+The serialize methods serialize the value into the buffer and
+return the buffer.
+<<serialize generic>>=
+(ftype (function (symbol &optional buffer) buffer)
+       serialize)
+(defgeneric serialize (keyword value &optional (buffer *buffer*)))
+@ %def serialize
+
+The generic function used to unserialize items takes a
+keyword as its first parameter and an optional buffer.
+The keyword is used to dispatch the appropriate implementation
+of the function.  The unserialize methods unserialize a value
+from the buffer and return the value and buffer.
+<<unserialize generic>>=
+(ftype (function (symbol &optional buffer) (values t buffer))
+       unserialize)
+(defgeneric unserialize (keyword &optional (buffer *buffer*)))
+@ 
+
+\subsection{Serializing and Unserializing Multiple Items}
+\label{api:serialize*}
+
+For most purposes, one wants to serialize more than one thing into a
+given buffer.  The \userial library provides some convenience macros
+so that one is not forced to explicitly call serialize or unserialize
+for each item.
+<<example of explicitly calling serialize>>=
+(with-buffer (make-buffer 1024)
+  (serialize :opcode :login)
+  (serialize :string login-name)
+  (serialize :string password)
+  (serialize :login-flags '(:hidden)))
+@ 
+
+The first such macro is [[serialize*]].  With this macro, one specifies
+a keyword-value list and an optional buffer.  With it, the above example
+could be serialized as follows.
+<<example of calling serialize*>>=
+(serialize* (:opcode :login
+             :string login-name
+             :string password
+             :login-flags '(:hidden)) (make-buffer 1024))
+@ %def serialize*
+
+To unserialize from the resulting buffer, one could explicitly call
+unserialize for each item in the buffer storing each item explicitly
+into a place.
+<<example of explicitly calling unserialize>>=
+(let (opcode login-name password flags)
+  (with-buffer buffer
+    (setf opcode     (unserialize :opcode)
+	  login-name (unserialize :string)
+	  password   (unserialize :string)
+	  flags      (unserialize :login-flags)))
+  ...)
+@
+
+To do the same sort of thing more directly, one can use the
+[[unserialize*]] macro.  This macro allows one to unserialize
+from a given buffer into given places using given keywords
+on which to dispatch.  The buffer parameter is optional.
+<<example of calling unserialize*>>=
+(let (opcode login-name password flags)
+  (unserialize* (:opcode      opcode
+		 :string      login-name
+		 :string      password
+		 :login-flags flags)     buffer)
+  ...)
+@ %def unserialize*
+
+Another way one might have used explicit calls to unserialize
+is to replace the [[let]] construct in the above with a
+[[let*]] and unserialize each variable as it is created.
+<<example of using let*>>=
+(with-buffer buffer
+  (let* ((opcode     (unserialize :opcode))
+	 (login-name (unserialize :string))
+	 (password   (unserialize :string))
+	 (flags      (unserialize :login-flags)))
+    ...))
+@ 
+
+To condense the above, one can use the [[unserialize-let*]] macro.
+It takes a list of keyword/variable-names, a buffer (which is not
+optional), and a body of statements to execute while the named
+variables are in scope.
+<<example of calling unserialize-let*>>=
+(unserialize-let* (:opcode      opcode
+		   :string      login-name
+		   :string      password
+		   :login-flags flags)     buffer
+  ...)
+@ %def unserialize-let*
+
+Suppose one wanted to unserialize into a list (as this is Lisp after all).
+One could explicitly call unserialize for each item in the list.
+<<example of explicitly using list>>=
+(with-buffer buffer
+  (list (unserialize :opcode)
+	(unserialize :string)
+	(unserialize :string)
+	(unserialize :login-flags)))
+@ 
+
+To eliminate a great deal of typing the word [[unserialize]], one can
+use the [[unserialize-list*]] macro.  The macro takes a list of keywords
+and an optional buffer.  It returns a list as the first value and the
+buffer as the second value.
+<<example of calling unserialize-list*>>=
+(unserialize-list* (:opcode :string :string :login-flags) buffer)
+@ %def unserialize-list*
+
+<<TODO>>=
+	   :make-bitfield-serializer
+	   :make-enum-serializer
+	   :make-float-serializer
+	   :make-int-serializer
+	   :make-uint-serializer
+	   :make-slot-serializer
+	   :make-accessor-serializer
+@ 
+

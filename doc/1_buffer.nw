@@ -20,9 +20,19 @@ described in \S\ref{sec:buf-types} below.
 The \userial library provides a function for allocating a new buffer.
 This function is described in \S\ref{api:make-buffer} below.
 
+Many \userial library routines that use a buffer declare the
+buffer parameter as optional.  There is a macro one can use to
+execute a body of statemets with a particular buffer as the
+default for calls in which the buffer parameter is omitted.
+This macro is described in \S\ref{api:with-buffer} below.
+
 There are a variety of functions provided to allow one to
 query and manipulate the size of \userial buffers.  These functions
 are described below in \S\ref{api:buffer-manip}.
+
+There are some basic functions for adding an unsigned byte to
+a buffer and retrieving an unsigned byte from a buffer.  Those
+functions are described below in \S\ref{api:add-byte}
 
 \subsection{Buffer-related Types and Constants}
 \label{sec:buf-types}
@@ -75,6 +85,23 @@ times if one can provide a decent, probable upper bound on the
 serialized size of the contents.
 @
 
+\subsection{Using a Buffer}
+\label{api:with-buffer}
+
+Most of the buffer manipulation and serialization functions declare
+the buffer as optional.  The following macro allows one to specify
+the buffer to use for these functions when the buffer parameter is
+omitted.
+<<with buffer macro>>=
+(defmacro with-buffer (buffer &body body))
+@ % def with-buffer
+
+This macro assigns the dynamic variable [[*buffer*]] to be
+the given buffer for the duration of the body.
+<<buffer variable>>=
+(declaim (special *buffer*))
+@
+
 \subsection{Manipulating and Querying Buffer Sizes}
 \label{api:buffer-manip}
 
@@ -85,7 +112,7 @@ current length of the serialized data which has already been
 unserialized from the buffer.
 <<buffer length>>=
 (ftype (function (&optional buffer) (integer 0 *)) buffer-length)
-(defun buffer-length (&optional buffer)
+(defun buffer-length (&optional (buffer *buffer*))
   ...)
 @ %def buffer-length
 
@@ -95,9 +122,9 @@ The current allocated size of a buffer can be queried with the
 buffer space allocated.
 <<buffer capacity>>=
 (ftype (function (&optional buffer) (integer 0 *)) buffer-capacity)
-(defun buffer-capacity (&optional buffer)
+(defun buffer-capacity (&optional (buffer *buffer*))
   ...)
-(setf (buffer-capacity &optional buffer) (integer 0 *))
+(setf (buffer-capacity &optional (buffer *buffer*)) (integer 0 *))
 @ %def buffer-capacity
 
 One can advance the current position within the buffer either to save
@@ -105,7 +132,7 @@ space for later serialization or to skip over bytes during
 unserialization.
 <<buffer advance>>=
 (ftype (function (&optional (integer 0 *) buffer) buffer) buffer-advance)
-(defun buffer-advance (&optional advance-by buffer))
+(defun buffer-advance (&optional (advance-by 1) (buffer *buffer*)))
   ...)
 @ %def buffer-advance
 If not specified, the [[buffer-advance]] function advances by a single
@@ -121,3 +148,24 @@ re-use the same buffer for the next serialization.
 (defun buffer-rewind (&optional (buffer *buffer*))
   ...)
 @ %def buffer-rewind
+
+\subsection{Adding and Retrieving Bytes}
+
+At its base, the buffer class is an adjustable array of unsigned bytes.
+To add a byte to a buffer, one can use the following function.  This
+function will expand the buffer if needed, place the given byte at
+the current fill pointer and advance the fill pointer.
+<<buffer add byte>>=
+(ftype (function (uchar &optional buffer) buffer)
+       buffer-add-byte)
+(defun buffer-add-byte (byte &optional (buffer *buffer*))
+@ %def buffer-add-byte
+
+Similarly, to retrieve an unsigned byte from a buffer, one can use
+the following function.  This function will retrieve the byte at
+the current fill pointer and advance the fill pointer.
+<<buffer add byte>>=
+(ftype (function (&optional buffer) (values uchar buffer))
+       buffer-get-byte)
+(defun buffer-get-byte (&optional (buffer *buffer*))
+@ %def buffer-get-byte
