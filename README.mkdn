@@ -16,6 +16,11 @@ Patrick Stein <pat@nklein.com>
   + [Defining New Serializers](#define-serializers)
   + [Pre-defined Serializers](#predefined-serializers)
 * [Sample Application: Game Protocol](#protocol)
+  + [Opcodes](#opcodes)
+  + [Logging In](#login)
+  + [Placing Ships](#placing)
+  + [Pinging](#pinging)
+  + [Firing](#firing)
   
 ## <a name="overview">Overview</a>
 
@@ -482,7 +487,215 @@ encoding strings as UTF-8 encoded sequences of arbitrary length.  The
 USerial library uses the [trivial-utf-8 library][utf] to
 encode and decode UTF-8 strings.
 
+For enumerated types, the USerial library defines the `:boolean`
+serializer for encoding an option that will be either `nil` or `t`.
+
   [ieee]: http://common-lisp.net/project/ieee-floats/
   [utf]: http://common-lisp.net/project/trivial-utf-8/
 
 ## <a name="protocol">Sample Application: Game Protocol</a>
+
+This example shows how one might use the tools above to serialize
+the data that would need to be exchanged between a client and
+server to implement a two-player game similar to Milton-Bradley's
+[Battleship game][bship].
+
+For this game, there will be a server and two clients.  Each
+client will begin the game by placing his ships on an (2K+1)x(2K+1) board.
+The board will have coordinates ranging from -K through +K in both
+the X and Y axis.  Ships will have to be placed either horizontally
+or vertically at integer coordinates.  All ships are three units
+in length.  It takes only one missile shot to sink a ship.
+
+Once the ships are placed, regular play begins.  During his turn
+during regular play, a client can either ping or fire.  Each
+client begins with a defined amount of energy available with which
+to ping and a defined number of missiles.
+
+If the client chooses to ping, the client chooses the radius of the
+ping and its center of origin.  The server will calculate the distance
+from the center of origin to each enemy ship within the specified
+radius from the origin, round those distances to the nearest integer,
+and reply to the client with that list.
+
+If the client chooses to fire, the client chooses the location upon
+which to fire.  The server will respond to the client to tell him
+whether the shot was a hit or a miss.
+
+### <a name="opcodes">Opcodes</a>
+
+To facilitate handling of received messages, each message will begin
+with an opcode identifying the message type.  Some messages will be
+sent only from the client to the server.  Others will be sent only
+from the server to the client.
+
+    (make-enum-serializer :client-opcodes
+                          (:login :place-ship :ping :fire))
+    (make-enum-serializer :server-opcodes
+                          (:welcome :ack :sunk :shot-results))
+
+The message-receiving portion on the server side could then do
+something like this:
+
+    (defun handle-message-from-client (message)
+      (ecase (unserialize :client-opcodes :buffer message)
+        (:login      (handle-login-message message))
+	(:place-ship (handle-place-ship-message message))
+	(:ping       (handle-ping-message message))
+	(:fire       (handle-ping-message message))))
+			   
+### <a name="login">Logging In</a>
+
+To begin a game, the client sends a message to the server with
+opcode `:login`.  The message declares the player's name,
+which board sizes the client will play, and an optional name of
+an opponent that the client is waiting to play.
+
+    (make-bitfield-serializer :playable-board-sizes
+                              (:small :medium :large :huge))
+    (defun make-login-message (name &key opponent small medium large huge)
+      (let ((sizes (append (when small  '(:small))
+                           (when medium '(:medium))
+			   (when large  '(:large))
+			   (when huge   '(:huge)))))
+        (let ((message (make-buffer)))
+	  (with-buffer message
+	     (serialize* (:client-opcode        :login
+	                  :string               name
+		          :playable-board-sizes sizes
+		          :boolean              (if opponent t nil)))
+	     (when opponent
+	       (serialize :string opponent)))
+	  message)))
+
+On the receiving side, the server might do something like the
+following (given that it already read the opcode from the message
+as it had in the previous section).
+
+    (defun handle-login-message (message)
+      (unserialize-let* (:string               name
+	                 :playable-board-sizes sizes
+			 :boolean              has-opponent) message
+	(assert (plusp (length name)))
+	(assert (plusp (length sizes)))
+	(cond
+	  (has-opponent (unserialize-let* (:string opponent) message
+	                  (match-or-queue name sizes opponent)))
+	  (t            (match-or-queue name sizes)))))
+
+When the server finds a match for the requested game, it composes
+welcome messages to each client.  The welcome message contains the
+size of the board in squares, the number of ships each player has,
+the amount of ping energy each player has, the number of missiles
+each player has, and the name of the opponent.
+
+    (defun make-welcome-message (squares ships energy missiles opponent)
+      (serialize* (:server-opcode :welcome
+                   :uint8 squares
+                   :uint8 ships
+		   :float32 energy
+		   :uint16 missiles
+		   :string opponent)
+		  :buffer (make-buffer)))
+
+Suppose the client had a class it was using to track the current
+state of the game.  The client could then use a slot-serializer
+or accessor-serializer to parse the incoming welcome message.
+
+    (make-accessor-serializer
+      :game-state-from-welcome (make-game-state)
+      (:uint8   game-state-board-size
+       :uint8   game-state-ships
+       :float32 game-state-energy
+       :uint16  game-state-missiles
+       :string  game-state-opponent))
+
+The client could then handle the welcome message as follows (assuming
+the opcode has already been unserialized from the message buffer):
+
+    (defun handle-welcome-message (message)
+      (unserialize-let* (:game-state-from-welcome game-state) message
+	;; do anything with this game state here
+	)
+
+### <a name="placing">Placing Ships</a>
+
+To place ships, a client specifies the center coordinate of the
+ship and whether the ship is oriented horizontally or vertically.
+
+    (make-enum-serializer :orientation (:horizontal :vertical))
+    (defun make-place-ship-message (x y orientation)
+      (serialize* (:client-opcode :place-ship
+                   :int8 x
+		   :int8 y
+		   :orientation orientation)
+		  :buffer (make-buffer)))
+
+The server could read the coordinates and orientation into local
+variables before calling a method to add the ship to the map.
+
+    (defun handle-place-ship-message (message)
+       (let (x y orientation)
+         (unserialize* (:int8        x
+	                :int8        y
+			:orientation orientation)
+		       :buffer message)
+	 (add-ship-to-map x y
+	                 :is-vertical (eql orientation
+			                   :vertical))))
+
+### <a name="pinging">Pinging</a>
+
+To perform a ping move, a client encodes a radius and a center
+for the ping.
+
+    (serialize* (:client-opcode :ping
+                 :float32       radius
+		 :int8          x
+		 :int 8         y)
+		:buffer (make-packet))
+
+Here, the server will decode the ping request into a list to send to
+its routine to calculate the reply.
+
+    (apply #'calculate-ping-response
+           (unserialize-list* (:float32 :int8 :int8)
+	                      :buffer message))
+
+Supposing the return from `calculate-ping-response` is a list of
+distances to ships, the ack message could be encoded like this:
+
+    (with-packet ack-message
+      (serialize* (:server-opcodes :ack
+                   :float32 remaining-ping-energy
+                   :uint16 (length hits)))
+      (mapcar #'(lambda (d) (serialize :uint8 d)) hits))
+      
+### <a name="firing">Firing</a>
+
+To send a fire message, the client just sends the coordinates of
+the location upon which to fire.
+
+    (serialize* (:client-opcodes :fire
+                 :int8           x
+		 :int8           y)
+		:buffer (make-buffer))
+
+If the server determines the shot was a hit, it must send a sunk
+message to the opponent.  Either way, a shot results message must
+be sent to the client.
+
+    (make-enum-serializer :shot-result (:hit :miss))
+    
+    (defun make-sunk-message (x y)
+      (serialize* (:server-opcodes :sunk
+                   :int8           x
+		   :int8           y)
+		  :buffer (make-buffer)))
+		  
+    (defun make-shot-results-message (hit)
+      (serialize* (:server-opcodes :shot-results
+                   :shot-result    (if hit :hit :miss))
+		  :buffer (make-buffer)))
+			 
+  [bship]: http://en.wikipedia.org/wiki/Battleship_(game)
