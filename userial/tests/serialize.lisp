@@ -66,7 +66,14 @@
 ;;; verify that the enums and bitfields serialize as expected
 (nst:def-test-group test-enum/bitfield-serializing ()
   (:documentation "Verify that the ENUM and BITFIELD serializes serialize as expected.")
-  (nst:def-test serialize-alpha-enum (:array-equalp (1 13 26))
+  (nst:def-test serialize-booleans (:array-equalp (1 0))
+    (serialize :boolean nil
+               :buffer (serialize :boolean t :buffer (make-buffer 2))))
+  (nst:def-test serialize-boolean-nil (:eql nil)
+    (serialize-unserialize :boolean nil))
+  (nst:def-test serialize-boolean-t (:eql t)
+    (serialize-unserialize :boolean t))
+  (nst:def-test serialize-alpha-enum (:array-equalp (0 12 25))
     (serialize :alphas :z
 	       :buffer (serialize :alphas :m
 				  :buffer
@@ -107,8 +114,9 @@
 
 ;;; test serializing sequences of things
 (nst:def-test-group test-serialize* ()
-  (nst:def-test serialize-uint8 (:array-equalp (0 255 1 128))
-    (serialize* (:uint8 0 :uint8 255 :uint8 1 :uint8 128)
+  (nst:def-test serialize-uint8 (:array-equalp (0 255 1 128 1 0))
+    (serialize* (:uint8 0 :uint8 255 :uint8 1 :uint8 128
+                 :boolean t :boolean nil)
 		:buffer (make-buffer 4)))
   (nst:def-test serialize-int8 (:array-equalp (128 129 127 255 0))
     (serialize* (:int8 0 :int8 1 :int8 -1 :int8 127 :int8 -128)

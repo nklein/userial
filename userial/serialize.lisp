@@ -199,23 +199,17 @@
 ;;; enum helper
 (defmacro make-enum-serializer (type (&rest choices))
   "Create serialize/unserialize methods keyed by TYPE where the possible values are given by CHOICES"
-  (let ((bytes (nth-value 0 (ceiling (log (1+ (length choices)) 256)))))
+  (let ((bytes (nth-value 0 (ceiling (log (length choices) 256)))))
     `(progn
-       (defmethod serialize ((type (eql ,type)) (value (eql nil))
-			     &key (buffer *buffer*))
-	 (declare (type buffer buffer)
-		  (ignore type value))
-	 (let ((value 0))
-	   (declare (type (unsigned-byte ,(* bytes 8)) value))
-	   (unroll-add-bytes buffer value ,bytes)))
        (defmethod serialize ((type (eql ,type)) value
 			     &key (buffer *buffer*))
 	 (declare (type buffer buffer)
 		  (ignore type)
 		  (type symbol value))
-	 (let ((value (ecase value ,@(loop :for ii :from 1
-				           :for vv :in choices
-				           :collecting (list vv ii)))))
+	 (let ((value (ecase value
+			,@(loop :for ii :from 0
+			        :for vv :in choices
+			        :collecting (list (if vv vv '(nil)) ii)))))
 	   (declare (type (unsigned-byte ,(* bytes 8)) value))
 	   (unroll-add-bytes buffer value ,bytes)))
      (defmethod unserialize ((type (eql ,type)) &key (buffer *buffer*))
@@ -223,11 +217,15 @@
 		(ignore type))
        (let ((value (unroll-get-bytes buffer ,bytes)))
 	 (declare (type (unsigned-byte ,(* bytes 8)) value))
-	   (let ((value (ecase value ,@(loop :for ii :from 1
-					     :for vv :in choices
-					     :collecting (list ii vv)))))
+	   (let ((value (ecase value
+			  ,@(loop :for ii :from 0
+			          :for vv :in choices
+			          :collecting (list ii vv)))))
 	     (declare (type symbol value))
 	     (values value buffer)))))))
+
+;;; define standard enum methods
+(make-enum-serializer :boolean (nil t))
 
 (defmacro make-bitfield-serializer (type (&rest choices))
   "Create serialize/unserialize methods keyed by TYPE where the CHOICES can either be specified singly or as a list."
