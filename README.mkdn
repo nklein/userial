@@ -220,8 +220,7 @@ There are a variety of pre-defined `serialize` and `unserialize` methods.
 These are describe in the ["Pre-defined Serializers"](#predefined-serializers)
 section below.
 
-\subsection{Serialize and Unserialize Generics}
-\S\ref{api:serialize}
+## <a name="serialize">Serialize and Unserialize Generics</a>
 
 The generic function used to serialize items takes a keyword
 as its first parameter, a value as its second parameter, and
