@@ -29,11 +29,11 @@
 
 ;;; prepare a criterion that checks the length of a given array
 (nst:def-criterion-alias (:length-is nn)
-    `(:apply buffer-length (:eql ,nn)))
+    `(:apply (lambda (b) (buffer-length :buffer b)) (:eql ,nn)))
 
 ;;; prepare a criterion that checks the length of a given array
 (nst:def-criterion-alias (:capacity-is nn)
-    `(:apply buffer-capacity (:eql ,nn)))
+    `(:apply (lambda (b) (buffer-capacity :buffer b)) (:eql ,nn)))
 
 (nst:def-test-group buffer-information (simple-buffers)
   (:documentation "Test querying of buffer properties")
@@ -49,18 +49,18 @@
 				    (:length-is 512)
 				    (:length-is 512))
     (dolist (buf base-buffers base-buffers)
-      (buffer-advance 512 buf)))
+      (buffer-advance :amount 512 :buffer buf)))
   (nst:def-test rewind-works (:seq (:length-is 0)
 				   (:length-is 0)
 				   (:length-is 0))
-    (mapcar #'buffer-rewind base-buffers))
+    (mapcar #'(lambda (b) (buffer-rewind :buffer b)) base-buffers))
   (nst:def-test with-buffer-works (:seq (:eql 0)
 					(:eql 10)
 					(:eql 32))
     (with-buffer (make-buffer 10)
       (let* ((a (nth-value 0 (buffer-length)))
 	     (b (nth-value 0 (buffer-capacity))))
-	(buffer-advance 32)
+	(buffer-advance :amount 32)
 	(list a b (nth-value 0 (buffer-length)))))))
 		    
 

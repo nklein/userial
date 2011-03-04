@@ -18,6 +18,18 @@ Patrick Stein <pat@nklein.com>
 * [Sample Application: Game Protocol](#protocol)
   
 ## <a name="overview">Overview</a>
+
+The USerial library is a general purpose library for serializing
+items into byte buffers and unserializing items back out of byte
+buffers.  The ["Buffer Handling" section](#buffer-handling) below
+describes the various ways one can manipulate USerial buffers.
+The ["Serializing and Unserializing" section](#serializing) below
+describes the different tools the USerial library provides for
+creating serializers and the serializers that the library provides
+out of the box.  The ["Sample Application: Game Protocol" section](#protocol)
+below describes how one might put all of these functions to use in
+preparing network packets for a simple game.
+
 ## <a name="buffer-handling">Buffer Handling</a>
 
 To serialize, one needs a place to put the data.  To unserialize, one
@@ -39,12 +51,15 @@ The USerial library provides a function for allocating a new buffer.
 This function is described in the
 ["Creating Buffers" section](#make-buffer) below.
 
-Many USerial library routines that use a buffer declare the
-buffer parameter as optional.  There is a macro one can use to
-execute a body of statemets with a particular buffer as the
-default for calls in which the buffer parameter is omitted.
-This macro is described in the ["Using a Buffer" section](#with-buffer)
-below.
+Many USerial library routines that use a buffer declare the buffer
+parameter as key parameter.  There is a macro one can use to
+execute a body of statemets with a particular buffer as the default
+for calls in which the buffer parameter is omitted.  This macro is
+described in the ["Using a Buffer" section](#with-buffer) below.
+
+The only exported USerial library routines that take a buffer
+parameter directly (as opposed to with a key parameter) are the
+`with-buffer` macro and the `unserialize-let*` macro.
 
 There are a variety of functions provided to allow one to
 query and manipulate the size of USerial buffers.  These functions
@@ -124,8 +139,8 @@ unserializing a buffer, the `buffer-length` function returns the
 current length of the serialized data which has already been
 unserialized from the buffer.
 
-    (ftype (function (&optional buffer) (integer 0 *)) buffer-length)
-    (defun buffer-length (&optional (buffer *buffer*))
+    (ftype (function (&key (:buffer buffer)) (integer 0 *)) buffer-length)
+    (defun buffer-length (&key (buffer *buffer*))
       ...)
 
 The current allocated size of a buffer can be queried with the
@@ -133,30 +148,31 @@ The current allocated size of a buffer can be queried with the
 `buffer-capacity` if needed to explicitly modify the amount of
 buffer space allocated.
 
-    (ftype (function (&optional buffer) (integer 0 *)) buffer-capacity)
-    (defun buffer-capacity (&optional (buffer *buffer*))
+    (ftype (function (&key (:buffer buffer)) (integer 0 *)) buffer-capacity)
+    (defun buffer-capacity (&key (buffer *buffer*))
       ...)
-    (setf (buffer-capacity &optional (buffer *buffer*)) (integer 0 *))
+    (setf (buffer-capacity &key (buffer *buffer*)) (integer 0 *))
 
 One can advance the current position within the buffer either to save
 space for later serialization or to skip over bytes during
 unserialization.
 
-    (ftype (function (&optional (integer 0 *) buffer) buffer) buffer-advance)
-    (defun buffer-advance (&optional (advance-by 1) (buffer *buffer*)))
+    (ftype (function (&key (:amount (integer 0 *))
+                           (:buffer buffer))       buffer)
+           buffer-advance)
+    (defun buffer-advance (&optional (amount 1) (buffer *buffer*)))
       ...)
       
 If not specified, the `buffer-advance` function advances by a single
 byte.
-
 
 One can reset the current position within the buffer back to the
 beginning to begin unserializing a serialized buffer, to fill in
 places that one skipped during the first stage of serialization, or to
 re-use the same buffer for the next serialization.
 
-    (ftype (function (&optional buffer) buffer) buffer-rewind)
-    (defun buffer-rewind (&optional (buffer *buffer*))
+    (ftype (function (&key (:buffer buffer)) buffer) buffer-rewind)
+    (defun buffer-rewind (&key (buffer *buffer*))
       ...)
 
 ### <a name="add-byte">Adding and Retrieving Bytes</a>
@@ -166,15 +182,16 @@ To add a byte to a buffer, one can use the following function.  This
 function will expand the buffer if needed, place the given byte at
 the current fill pointer and advance the fill pointer.
 
-    (ftype (function (uchar &optional buffer) buffer) buffer-add-byte)
-    (defun buffer-add-byte (byte &optional (buffer *buffer*))
+    (ftype (function (uchar &key (:buffer buffer)) buffer) buffer-add-byte)
+    (defun buffer-add-byte (byte &key (buffer *buffer*))
 
 Similarly, to retrieve an unsigned byte from a buffer, one can use
 the following function.  This function will retrieve the byte at
 the current fill pointer and advance the fill pointer.
 
-    (ftype (function (&optional buffer) (values uchar buffer)) buffer-get-byte)
-    (defun buffer-get-byte (&optional (buffer *buffer*))
+    (ftype (function (&key (:buffer buffer)) (values uchar buffer))
+           buffer-get-byte)
+    (defun buffer-get-byte (&key (buffer *buffer*))
     
 ## <a name="serializing">Serializing and Unserializing</a>
 
@@ -208,9 +225,11 @@ appropriate implementation of the function for the given value.
 The serialize methods serialize the value into the buffer and
 return the buffer.
 
-    (ftype (function (symbol &optional buffer) buffer)
+    (ftype (function (symbol &key (:buffer buffer) &allow-other-keys)
+                     buffer)
            serialize)
-    (defgeneric serialize (keyword value &optional (buffer *buffer*)))
+    (defgeneric serialize (keyword value &key (buffer *buffer*)
+                                         &allow-other-keys))
 
 The generic function used to unserialize items takes a
 keyword as its first parameter and an optional buffer.
@@ -218,16 +237,19 @@ The keyword is used to dispatch the appropriate implementation
 of the function.  The unserialize methods unserialize a value
 from the buffer and return the value and buffer.
 
-    (ftype (function (symbol &optional buffer) (values t buffer))
+    (ftype (function (symbol &key (:buffer buffer) &allow-other-keys)
+                     (values t buffer))
            unserialize)
-    (defgeneric unserialize (keyword &optional (buffer *buffer*)))
+    (defgeneric unserialize (keyword &key (buffer *buffer*)
+                                     &allow-other-keys))
 
 ### <a name="serialize*">Serializing and Unserializing Multiple Items</a>
 
 For most purposes, one wants to serialize more than one thing into a
 given buffer.  The USerial library provides some convenience macros
 so that one is not forced to explicitly call serialize or unserialize
-for each item.
+for each item.  Here is an example of explicitly calling the serialize
+method for each item.
 
     (with-buffer (make-buffer 1024)
       (serialize :opcode :login)
@@ -242,7 +264,7 @@ could be serialized as follows.
     (serialize* (:opcode :login
                  :string login-name
                  :string password
-                 :login-flags '(:hidden)) (make-buffer 1024))
+                 :login-flags '(:hidden)) :buffer (make-buffer 1024))
 
 To unserialize from the resulting buffer, one could explicitly call
 unserialize for each item in the buffer storing each item explicitly
@@ -259,13 +281,13 @@ into a place.
 To do the same sort of thing more directly, one can use the
 `unserialize*` macro.  This macro allows one to unserialize
 from a given buffer into given places using given keywords
-on which to dispatch.  The buffer parameter is optional.
+on which to dispatch.
 
     (let (opcode login-name password flags)
       (unserialize* (:opcode      opcode
                      :string      login-name
                      :string      password
-                     :login-flags flags)     buffer)
+                     :login-flags flags)     :buffer buffer)
       ...)
 
 Another way one might have used explicit calls to unserialize
@@ -279,10 +301,10 @@ is to replace the `let` construct in the above with a
              (flags      (unserialize :login-flags)))
         ...))
 
-To condense the above, one can use the `unserialize-let*` macro.
-It takes a list of keyword/variable-names, a buffer (which is not
+To condense the above, one can use the `unserialize-let*` macro.  It
+takes a list of keyword/variable-names, a buffer (which is not
 optional), and a body of statements to execute while the named
-variables are in scope.
+variables are in scope.  Note: the buffer argument here is required.
 
     (unserialize-let* (:opcode      opcode
                        :string      login-name
@@ -304,7 +326,8 @@ use the `unserialize-list*` macro.  The macro takes a list of keywords
 and an optional buffer.  It returns a list as the first value and the
 buffer as the second value.
 
-    (unserialize-list* (:opcode :string :string :login-flags) buffer)
+    (unserialize-list* (:opcode :string :string :login-flags)
+                       :buffer buffer)
 
 ### <a name="define-serializers">Defining New Serializers</a>
 
@@ -330,7 +353,7 @@ use the following macro:
 
     (defmacro make-uint-serializer (key bytes))
     (make-uint-serializer :unsigned-byte 1)
-    (make-uint-serializer :unsigned-doubleword 2)
+    (make-uint-serializer :unsigned-doubleword 4)
     
 Note: the `bytes` argument to the `make-int-serializer` and
 `make-uint-serializer` macros must be a constant value available
@@ -351,14 +374,14 @@ encode rational numbers (technically not floating point, I know)
 as 48-bit fixed point numbers with 16-bits devoted to the fractional portion
 and 32-bits devoted to the integer portion.
 
-    (make-float-serializer :fixed-32+16 rational 6
+    (make-float-serializer :fixed-32/16 rational 6
                            #'(lambda (rr) (round (* rr 65536)))
                            #'(lambda (ii) (/ ii 65536)))
 
 The USerial library defines macros for helping one encode bit fields
 (to represent choices where more than one possibility at a time is
 acceptable) and enumerations (to represent choices where only a single
-selection can be made).  These macros take a key used to specify the
+selection can be made).  These macros take a keyword used to specify the
 method and a list of choices.
 
     (make-bitfield-serializer :wants (:coffee :tea :sega))
@@ -379,7 +402,7 @@ is a single item in it as in the `:tea` example above.
 To facilitate serializing and deserializing classes and structs,
 the USerial library provides macros which create serializers and
 unserializers for items based on slots or accessors.  These macros
-take a key used to specify the methods, a factory function used by the
+take a key used to specify the methods, a factory form used by the
 unserialize method to create a new instance of the class or struct,
 and a plist of key/name pairs where the name is a slot name for the
 slot serializers or an accessor name for the accessor serializers and
