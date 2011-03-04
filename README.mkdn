@@ -1,0 +1,465 @@
+
+# USerial v0.2.2011.02.21
+
+Patrick Stein <pat@nklein.com>
+
+* [Overview](#overview)
+* [Buffer Handling](#buffer-handling)
+  + [Buffer-related Types and Constants](#buffer-types)
+  + [Creating Buffers](#make-buffer)
+  + [Using a Buffer](#with-buffer)
+  + [Manipulating and Querying Buffer Sizes](#buffer-manip)
+  + [Adding and Retrieving Bytes](#add-byte)
+* [Serializing and Unserializing](#serializing)
+  + [Serializing and Unserializing](#serializing)
+  + [Serializing and Unserializing Multiple Items](#serialize*)
+  + [Defining New Serializers](#define-serializers)
+  + [Pre-defined Serializers](#predefined-serializers)
+* [Sample Application: Game Protocol](#protocol)
+  
+## <a name="overview">Overview</a>
+## <a name="buffer-handling">Buffer Handling</a>
+
+To serialize, one needs a place to put the data.  To unserialize, one
+needs a place from which to fetch the data.  Some libraries choose to
+implement such things as streams.  The USerial library serializes to
+and unserializes from memory buffers because the primary goal for this
+library is to facility assembly and disassembly of datagram packets.
+
+The USerial library uses adjustable arrays of unsigned bytes with fill
+pointers.  The fill pointer is used to track the current position in
+the buffer for serializing or unserializing.  The buffers are
+automatically resized to accomodate the serialized data.
+
+The basic types and constants used for buffer-related operations are
+described in the
+["Buffer-related Types and Constants" section](#buffer-types) below.
+
+The USerial library provides a function for allocating a new buffer.
+This function is described in the
+["Creating Buffers" section](#make-buffer) below.
+
+Many USerial library routines that use a buffer declare the
+buffer parameter as optional.  There is a macro one can use to
+execute a body of statemets with a particular buffer as the
+default for calls in which the buffer parameter is omitted.
+This macro is described in the ["Using a Buffer" section](#with-buffer)
+below.
+
+There are a variety of functions provided to allow one to
+query and manipulate the size of USerial buffers.  These functions
+are described in the
+["Manipulating and Querying Buffer Sizes" section](#buffer-manip)
+below.
+
+There are some basic functions for adding an unsigned byte to
+a buffer and retrieving an unsigned byte from a buffer.  Those
+functions are described below in the
+["Adding and Retrieving Bytes" section](#add-byte).
+
+#### <a name="buffer-types">Buffer-related Types and Constants</a>
+
+The USerial buffers are adjustable arrays of unsigned bytes with fill
+pointers.  The array is adjustable so that it can be easily grown as
+needed to accomodate serialized data.  It has a fill pointer that is
+used to track the current length of serialized data (as distinguished
+from the current allocated capacity of the array) or the current point
+from which data will be unserialized.
+
+    (deftype buffer () '(array (unsigned-byte 8) (*)))
+
+When one creates a USerial buffer, one can provide the initial
+capacity for the buffer.  If no initial capacity is given for the
+buffer, a default size is used.
+
+    (defconstant +default-buffer-capacity+ 32768)
+
+When one is adding bytes to a buffer, it would be very inefficient to
+reallocate the buffer each time an additional byte of space is needed.
+To this end, when the USerial library needs to increase the size of a
+buffer it adds at least the minimum of the current buffer size and
+this `+default-buffer-expand+`.
+
+    (defconstant +default-buffer-expand+ 8192)
+    
+For example, if the buffer were currently 256 bytes when the buffer
+needed to grow by a byte, it would be expanded to 512 bytes.  If the
+buffer were currently 10,000 bytes when the buffer needed to grow by a
+byte, it would be expanded to 18,192 bytes.
+
+### <a name="make-buffer">Creating Buffers</a>
+
+The buffer allocator itself is the `make-buffer` function.  It takes
+an optional parameter specifying the initial capacity of the buffer.
+
+    (ftype (function (&optional (integer 1 *)) buffer) make-buffer)
+    (defun make-buffer (&optional initial-capacity)
+      ...)
+      
+As the buffer will be resized as needed, this parameter need not be
+set high enough to accomodate any and all serializations.  It is
+provided merely to keep from having to reallocate the buffer several
+times if one can provide a decent, probable upper bound on the
+serialized size of the contents.
+
+### <a name="with-buffer">Using a Buffer</a>
+
+Most of the buffer manipulation and serialization functions declare
+the buffer as optional.  The following macro allows one to specify
+the buffer to use for these functions when the buffer parameter is
+omitted.
+
+    (defmacro with-buffer (buffer &body body))
+
+This macro assigns the dynamic variable `*buffer*` to be
+the given buffer for the duration of the body.
+
+    (declaim (special *buffer*))
+
+### <a name="buffer-manip">Manipulating and Querying Buffer Sizes</a>
+
+When serializing a buffer, the `buffer-length` function returns
+the current length of the serialized data within the buffer.  When
+unserializing a buffer, the `buffer-length` function returns the
+current length of the serialized data which has already been
+unserialized from the buffer.
+
+    (ftype (function (&optional buffer) (integer 0 *)) buffer-length)
+    (defun buffer-length (&optional (buffer *buffer*))
+      ...)
+
+The current allocated size of a buffer can be queried with the
+`buffer-capacity` function.  One can `(setf ...)` the
+`buffer-capacity` if needed to explicitly modify the amount of
+buffer space allocated.
+
+    (ftype (function (&optional buffer) (integer 0 *)) buffer-capacity)
+    (defun buffer-capacity (&optional (buffer *buffer*))
+      ...)
+    (setf (buffer-capacity &optional (buffer *buffer*)) (integer 0 *))
+
+One can advance the current position within the buffer either to save
+space for later serialization or to skip over bytes during
+unserialization.
+
+    (ftype (function (&optional (integer 0 *) buffer) buffer) buffer-advance)
+    (defun buffer-advance (&optional (advance-by 1) (buffer *buffer*)))
+      ...)
+      
+If not specified, the `buffer-advance` function advances by a single
+byte.
+
+
+One can reset the current position within the buffer back to the
+beginning to begin unserializing a serialized buffer, to fill in
+places that one skipped during the first stage of serialization, or to
+re-use the same buffer for the next serialization.
+
+    (ftype (function (&optional buffer) buffer) buffer-rewind)
+    (defun buffer-rewind (&optional (buffer *buffer*))
+      ...)
+
+### <a name="add-byte">Adding and Retrieving Bytes</a>
+
+At its base, the buffer class is an adjustable array of unsigned bytes.
+To add a byte to a buffer, one can use the following function.  This
+function will expand the buffer if needed, place the given byte at
+the current fill pointer and advance the fill pointer.
+
+    (ftype (function (uchar &optional buffer) buffer) buffer-add-byte)
+    (defun buffer-add-byte (byte &optional (buffer *buffer*))
+
+Similarly, to retrieve an unsigned byte from a buffer, one can use
+the following function.  This function will retrieve the byte at
+the current fill pointer and advance the fill pointer.
+
+    (ftype (function (&optional buffer) (values uchar buffer)) buffer-get-byte)
+    (defun buffer-get-byte (&optional (buffer *buffer*))
+    
+## <a name="serializing">Serializing and Unserializing</a>
+
+The ultimate purpose of the USerial library is to allow one to
+serialize and unserialize data.  To this end, the library defines two
+generic functions that dispatch on a keyword parameter.  These generic
+functions are described in the
+["Serializing and Unserializing" section](#serializing) below.
+
+There are some macros that facilitate serializing and unserializing
+sequences of items.  These macros are described in the
+["Serializing and Unserializing Multiple Items" section](#serialize*)
+below.
+
+There are other macros which facilitate defining new serialize
+and unserialize methods for common situations.  These macros are
+described in the
+["Defining New Serializers" section](#define-serializers) below.
+
+There are a variety of pre-defined `serialize` and `unserialize` methods.
+These are describe in the ["Pre-defined Serializers"](#predefined-serializers)
+section below.
+
+\subsection{Serialize and Unserialize Generics}
+\S\ref{api:serialize}
+
+The generic function used to serialize items takes a keyword
+as its first parameter, a value as its second parameter, and
+an optional buffer.  The keyword is used to dispatch the
+appropriate implementation of the function for the given value.
+The serialize methods serialize the value into the buffer and
+return the buffer.
+
+    (ftype (function (symbol &optional buffer) buffer)
+           serialize)
+    (defgeneric serialize (keyword value &optional (buffer *buffer*)))
+
+The generic function used to unserialize items takes a
+keyword as its first parameter and an optional buffer.
+The keyword is used to dispatch the appropriate implementation
+of the function.  The unserialize methods unserialize a value
+from the buffer and return the value and buffer.
+
+    (ftype (function (symbol &optional buffer) (values t buffer))
+           unserialize)
+    (defgeneric unserialize (keyword &optional (buffer *buffer*)))
+
+### <a name="serialize*">Serializing and Unserializing Multiple Items</a>
+
+For most purposes, one wants to serialize more than one thing into a
+given buffer.  The USerial library provides some convenience macros
+so that one is not forced to explicitly call serialize or unserialize
+for each item.
+
+    (with-buffer (make-buffer 1024)
+      (serialize :opcode :login)
+      (serialize :string login-name)
+      (serialize :string password)
+      (serialize :login-flags '(:hidden)))
+
+The first such macro is `serialize*`.  With this macro, one specifies
+a keyword-value list and an optional buffer.  With it, the above example
+could be serialized as follows.
+
+    (serialize* (:opcode :login
+                 :string login-name
+                 :string password
+                 :login-flags '(:hidden)) (make-buffer 1024))
+
+To unserialize from the resulting buffer, one could explicitly call
+unserialize for each item in the buffer storing each item explicitly
+into a place.
+
+    (let (opcode login-name password flags)
+      (with-buffer buffer
+        (setf opcode     (unserialize :opcode)
+              login-name (unserialize :string)
+              password   (unserialize :string)
+              flags      (unserialize :login-flags)))
+      ...)
+
+To do the same sort of thing more directly, one can use the
+`unserialize*` macro.  This macro allows one to unserialize
+from a given buffer into given places using given keywords
+on which to dispatch.  The buffer parameter is optional.
+
+    (let (opcode login-name password flags)
+      (unserialize* (:opcode      opcode
+                     :string      login-name
+                     :string      password
+                     :login-flags flags)     buffer)
+      ...)
+
+Another way one might have used explicit calls to unserialize
+is to replace the `let` construct in the above with a
+`let*` and unserialize each variable as it is created.
+
+    (with-buffer buffer
+      (let* ((opcode     (unserialize :opcode))
+             (login-name (unserialize :string))
+             (password   (unserialize :string))
+             (flags      (unserialize :login-flags)))
+        ...))
+
+To condense the above, one can use the `unserialize-let*` macro.
+It takes a list of keyword/variable-names, a buffer (which is not
+optional), and a body of statements to execute while the named
+variables are in scope.
+
+    (unserialize-let* (:opcode      opcode
+                       :string      login-name
+                       :string      password
+                       :login-flags flags)      buffer
+      ...)
+
+Suppose one wanted to unserialize into a list (as this is Lisp after all).
+One could explicitly call unserialize for each item in the list.
+
+    (with-buffer buffer
+      (list (unserialize :opcode)
+            (unserialize :string)
+            (unserialize :string)
+            (unserialize :login-flags)))
+
+To eliminate a great deal of typing the word `unserialize`, one can
+use the `unserialize-list*` macro.  The macro takes a list of keywords
+and an optional buffer.  It returns a list as the first value and the
+buffer as the second value.
+
+    (unserialize-list* (:opcode :string :string :login-flags) buffer)
+
+### <a name="define-serializers">Defining New Serializers</a>
+
+Almost every protocol requires the encoding and decoding of
+integer values.  To make it easy to create as many of these
+types as one's application requires, the USerial library defines
+a macro which creates a serialize and unserialize method for
+an integer that is a given number of bytes long.  The macro
+takes two arguments: the key used to specify the method
+and an integer number of bytes.
+
+    (defmacro make-int-serializer (key bytes))
+
+For example, to make serialize and unserialize methods for
+signed bytes and signed quadwords, one could simply call:
+
+    (make-int-serializer :signed-byte 1)
+    (make-int-serializer :signed-quadword 8)
+
+Similarly, if one wanted to create serialize and unserialize
+methods for unsigned bytes and unsigned doublewords, one could
+use the following macro:
+
+    (defmacro make-uint-serializer (key bytes))
+    (make-uint-serializer :unsigned-byte 1)
+    (make-uint-serializer :unsigned-doubleword 2)
+    
+Note: the `bytes` argument to the `make-int-serializer` and
+`make-uint-serializer` macros must be a constant value available
+at the time the macro is expanded.
+
+To serialize floating point numbers, one must have a function
+that encodes floating point numbers into an integer representation
+and a function that decodes the integer representation back into
+a floating point number.  Then, one can use the `make-float-serializer`
+macro which takes a key used to specify the method, a lisp type for the
+floating point number, a constant number of bytes for the encoded
+values, an encoder, and a decoder.
+
+    (make-float-serializer (key type bytes encoder decoder))
+
+For example, the following would create serializers that
+encode rational numbers (technically not floating point, I know)
+as 48-bit fixed point numbers with 16-bits devoted to the fractional portion
+and 32-bits devoted to the integer portion.
+
+    (make-float-serializer :fixed-32+16 rational 6
+                           #'(lambda (rr) (round (* rr 65536)))
+                           #'(lambda (ii) (/ ii 65536)))
+
+The USerial library defines macros for helping one encode bit fields
+(to represent choices where more than one possibility at a time is
+acceptable) and enumerations (to represent choices where only a single
+selection can be made).  These macros take a key used to specify the
+method and a list of choices.
+
+    (make-bitfield-serializer :wants (:coffee :tea :sega))
+    (make-enum-serializer :direction (:left :right :up :down))
+
+With the bit field serializer, one can specify a single option
+or a list of zero or more options.  With the enumeration serializer,
+must specify a single option.
+
+    (serialize :wants :tea)
+    (serialize :wants nil)
+    (serialize :wants '(:tea :sega))
+    (serialize :direction :up)
+
+When unserializing, the bit field will always return a list even when there
+is a single item in it as in the `:tea` example above.
+
+To facilitate serializing and deserializing classes and structs,
+the USerial library provides macros which create serializers and
+unserializers for items based on slots or accessors.  These macros
+take a key used to specify the methods, a factory function used by the
+unserialize method to create a new instance of the class or struct,
+and a plist of key/name pairs where the name is a slot name for the
+slot serializers or an accessor name for the accessor serializers and
+the key with each name specifies how to serialize the value in that
+slot.
+
+An example will help to clarify the previous paragraph.
+Suppose one had a simple struct listing a person's name, age, and
+favorite color.
+
+    (defstruct person name age color)
+
+One could create the following serialize and unserialize pairs to
+allow encoding the data for internal use (where all data is available)
+or for public use (where the age is kept secret).
+
+    (make-slot-serializer :person-internal
+                          (make-person)
+                          (:string name
+                           :uint8 age
+                           :string color))
+    (make-accessor-serializer :person-public
+                              (make-person :age :unknown)
+                              (:string person-name
+                               :string person-color))
+
+Here is a simple session showing the above in action.  The following
+code first defines a function which serializes a value using a given
+key to a new buffer, rewinds the buffer, and unserializes from the
+buffer using the key.
+
+    CL-USER> (defun u-s (key value)
+                (with-buffer (make-buffer)
+                   (serialize key value)
+                   (buffer-rewind)
+                   (nth-value 0 (unserialize key))))
+    U-S
+                                 
+    CL-USER> (defvar *p* (make-person :name "Patrick"
+                                      :age 40
+                                      :color "Green"))
+    *P*
+
+    CL-USER> (u-s :person-internal *p*)
+    #S(PERSON :NAME "Patrick" :AGE 40 :COLOR "Green")
+
+    CL-USER> (u-s :person-public *p*)
+    #S(PERSON :NAME "Patrick" :AGE :UNKNOWN :COLOR "Green")
+
+### <a name="predefined-serializers">Pre-defined Serializers</a>
+
+The USerial library defines some commonly required serializers.
+
+For signed integers, the USerial library defines the following
+serializers (and unserializers): `:int8` for signed bytes, `:int16`
+for signed 16-bit integers, `:int32` for signed 32-bit integers, and
+`:int64` for signed 64-bit integers.
+
+For unsigned integers, the USerial library defines the
+following serializers: `:uint8` for unsigned bytes, `:uint16`
+for unsigned 16-bit integers, `:uint24` for unsigned 24-bit integers,
+`:uint32` for unsigned 32-bit integers, `:uint48` for unsigned
+48-bit integers, and `:uint64` for unsigned 64-bit integers.
+
+For floating point numbers, the USerial library defines the `:float32`
+serializer for encoding `single-float` values as 32-bit IEEE floating
+point numbers and the `:float64` serializer for encoding
+`double-float` values as 64-bit IEEE floating point numbers.  The
+USerial library uses the [ieee-float library][ieee] to encode
+and decode floating point numbers.
+
+For arbitrary byte sequences, the USerial library defines the
+`:bytes` serializer.
+
+For strings, the USerial library defines the `:string` serializer for
+encoding strings as UTF-8 encoded sequences of arbitrary length.  The
+USerial library uses the [trivial-utf-8 library][utf] to
+encode and decode UTF-8 strings.
+
+  [ieee]: http://common-lisp.net/project/ieee-floats/
+  [utf]: http://common-lisp.net/project/trivial-utf-8/
+
+## <a name="protocol">Sample Application: Game Protocol</a>

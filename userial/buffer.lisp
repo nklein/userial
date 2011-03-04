@@ -40,6 +40,15 @@
   (declare (type buffer buffer))
   (fill-pointer buffer))
 
+(declaim (ftype (function (uint &optional buffer) buffer)
+		(setf buffer-length)))
+(defun (setf buffer-length) (new-length &optional (buffer *buffer*))
+  "Sets the length of the BUFFER to NEW-LENGTH"
+  (declare (type buffer buffer)
+	   (type uint new-length))
+  (setf (fill-pointer buffer) new-length)
+  buffer)
+
 (declaim (inline buffer-capacity)
 	 (ftype (function (&optional buffer) uint) buffer-capacity))
 (defun buffer-capacity (&optional (buffer *buffer*))

@@ -79,14 +79,15 @@
 (nst:def-test-group test-string-and-byte-serializing ()
   (:documentation "Test that strings and raw-byte arrays serialize
                    as expected")
-  (nst:def-test serialize-ascii-string (:array-equalp (0 3 70 111 111))
+  (nst:def-test serialize-ascii-string (:array-equalp (70 111 111 237 0))
     (serialize :string "Foo" (make-buffer 5)))
   #+sbcl
-  (nst:def-test serialize-utf8-string (:array-equalp (0 5 70 111 226 152 186))
+  (nst:def-test serialize-utf8-string (:array-equalp (70 111 226 152 186 237 0))
     (serialize :string "Fo☺" (make-buffer 7)))
-  (nst:def-test serialize-byte-array (:array-equalp (0 5 0 3 70 111 111))
+  (nst:def-test serialize-byte-array (:array-equalp
+				         (70 111 111 237 237 0 237 0))
     (serialize :bytes (serialize :string "Foo" (make-buffer 5))
-	       (make-buffer 7)))
+	       (make-buffer 8)))
   #+does-not-work-yet (nst:def-test serialize-unserialize-strings
 			  (:sample-strings :string))
   (nst:def-test unserialize-ascii-string (:equal "Foo")
@@ -152,9 +153,9 @@
 ;;; prepare a buffer for testing unserializing
 (nst:def-fixtures unserialize-buffers
     (:documentation "Prepare some buffers for unserializing")
-  (buffer (buffer-rewind (serialize* (:int16 -1187 :string "Foo"
-				      :uint8 3 :uint16 2178)
-				     (make-buffer 64)))))
+  (ubuffer (buffer-rewind (serialize* (:int16 -1187 :string "Foo"
+				       :uint8 3 :uint16 2178)
+				      (make-buffer 64)))))
 
 ;;; test various methods of unserializing things
 (nst:def-test-group test-unserialize-techniques (unserialize-buffers)
@@ -164,12 +165,12 @@
 	  c)
       (nth-value 0
 		 (unserialize* (:int16 (first a) :string (second a)
-			        :uint8 b :uint16 c) (buffer-rewind buffer)))
+			        :uint8 b :uint16 c) (buffer-rewind ubuffer)))
       (list a b c)))
   (nst:def-test test-unserialize-let* (:equalp '(-1187 "Foo" 3 2178))
     (nth-value 0 (unserialize-let* (:int16 a :string b :uint8 c :uint16 d)
-		     (buffer-rewind buffer)
+		     (buffer-rewind ubuffer)
 		   (list a b c d))))
   (nst:def-test test-unserialize-list* (:equalp '(-1187 "Foo" 3 2178))
     (nth-value 0 (unserialize-list* '(:int16 :string :uint8 :uint16)
-                                    (buffer-rewind buffer)))))
+                                    (buffer-rewind ubuffer)))))
