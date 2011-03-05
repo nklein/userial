@@ -541,10 +541,10 @@ something like this:
     (defun handle-message-from-client (message)
       (ecase (unserialize :client-opcodes :buffer message)
         (:login      (handle-login-message message))
-	(:place-ship (handle-place-ship-message message))
-	(:ping       (handle-ping-message message))
-	(:fire       (handle-ping-message message))))
-			   
+        (:place-ship (handle-place-ship-message message))
+        (:ping       (handle-ping-message message))
+        (:fire       (handle-ping-message message))))
+                           
 ### <a name="login">Logging In</a>
 
 To begin a game, the client sends a message to the server with
@@ -557,17 +557,17 @@ an opponent that the client is waiting to play.
     (defun make-login-message (name &key opponent small medium large huge)
       (let ((sizes (append (when small  '(:small))
                            (when medium '(:medium))
-			   (when large  '(:large))
-			   (when huge   '(:huge)))))
+                           (when large  '(:large))
+                           (when huge   '(:huge)))))
         (let ((message (make-buffer)))
-	  (with-buffer message
-	     (serialize* (:client-opcode        :login
-	                  :string               name
-		          :playable-board-sizes sizes
-		          :boolean              (if opponent t nil)))
-	     (when opponent
-	       (serialize :string opponent)))
-	  message)))
+          (with-buffer message
+             (serialize* (:client-opcode        :login
+                          :string               name
+                          :playable-board-sizes sizes
+                          :boolean              (if opponent t nil)))
+             (when opponent
+               (serialize :string opponent)))
+          message)))
 
 On the receiving side, the server might do something like the
 following (given that it already read the opcode from the message
@@ -575,14 +575,14 @@ as it had in the previous section).
 
     (defun handle-login-message (message)
       (unserialize-let* (:string               name
-	                 :playable-board-sizes sizes
-			 :boolean              has-opponent) message
-	(assert (plusp (length name)))
-	(assert (plusp (length sizes)))
-	(cond
-	  (has-opponent (unserialize-let* (:string opponent) message
-	                  (match-or-queue name sizes opponent)))
-	  (t            (match-or-queue name sizes)))))
+                         :playable-board-sizes sizes
+                         :boolean              has-opponent) message
+        (assert (plusp (length name)))
+        (assert (plusp (length sizes)))
+        (cond
+          (has-opponent (unserialize-let* (:string opponent) message
+                          (match-or-queue name sizes opponent)))
+          (t            (match-or-queue name sizes)))))
 
 When the server finds a match for the requested game, it composes
 welcome messages to each client.  The welcome message contains the
@@ -594,10 +594,10 @@ each player has, and the name of the opponent.
       (serialize* (:server-opcode :welcome
                    :uint8 squares
                    :uint8 ships
-		   :float32 energy
-		   :uint16 missiles
-		   :string opponent)
-		  :buffer (make-buffer)))
+                   :float32 energy
+                   :uint16 missiles
+                   :string opponent)
+                  :buffer (make-buffer)))
 
 Suppose the client had a class it was using to track the current
 state of the game.  The client could then use a slot-serializer
@@ -616,8 +616,8 @@ the opcode has already been unserialized from the message buffer):
 
     (defun handle-welcome-message (message)
       (unserialize-let* (:game-state-from-welcome game-state) message
-	;; do anything with this game state here
-	)
+        ;; do anything with this game state here
+        )
 
 ### <a name="placing">Placing Ships</a>
 
@@ -628,9 +628,9 @@ ship and whether the ship is oriented horizontally or vertically.
     (defun make-place-ship-message (x y orientation)
       (serialize* (:client-opcode :place-ship
                    :int8 x
-		   :int8 y
-		   :orientation orientation)
-		  :buffer (make-buffer)))
+                   :int8 y
+                   :orientation orientation)
+                  :buffer (make-buffer)))
 
 The server could read the coordinates and orientation into local
 variables before calling a method to add the ship to the map.
@@ -638,12 +638,12 @@ variables before calling a method to add the ship to the map.
     (defun handle-place-ship-message (message)
        (let (x y orientation)
          (unserialize* (:int8        x
-	                :int8        y
-			:orientation orientation)
-		       :buffer message)
-	 (add-ship-to-map x y
-	                 :is-vertical (eql orientation
-			                   :vertical))))
+                        :int8        y
+                        :orientation orientation)
+                       :buffer message)
+         (add-ship-to-map x y
+                         :is-vertical (eql orientation
+                                           :vertical))))
 
 ### <a name="pinging">Pinging</a>
 
@@ -652,16 +652,16 @@ for the ping.
 
     (serialize* (:client-opcode :ping
                  :float32       radius
-		 :int8          x
-		 :int 8         y)
-		:buffer (make-packet))
+                 :int8          x
+                 :int 8         y)
+                :buffer (make-packet))
 
 Here, the server will decode the ping request into a list to send to
 its routine to calculate the reply.
 
     (apply #'calculate-ping-response
            (unserialize-list* (:float32 :int8 :int8)
-	                      :buffer message))
+                              :buffer message))
 
 Supposing the return from `calculate-ping-response` is a list of
 distances to ships, the ack message could be encoded like this:
@@ -679,8 +679,8 @@ the location upon which to fire.
 
     (serialize* (:client-opcodes :fire
                  :int8           x
-		 :int8           y)
-		:buffer (make-buffer))
+                 :int8           y)
+                :buffer (make-buffer))
 
 If the server determines the shot was a hit, it must send a sunk
 message to the opponent.  Either way, a shot results message must
@@ -691,12 +691,12 @@ be sent to the client.
     (defun make-sunk-message (x y)
       (serialize* (:server-opcodes :sunk
                    :int8           x
-		   :int8           y)
-		  :buffer (make-buffer)))
-		  
+                   :int8           y)
+                  :buffer (make-buffer)))
+                  
     (defun make-shot-results-message (hit)
       (serialize* (:server-opcodes :shot-results
                    :shot-result    (if hit :hit :miss))
-		  :buffer (make-buffer)))
-			 
+                  :buffer (make-buffer)))
+                         
   [bship]: http://en.wikipedia.org/wiki/Battleship_(game)
