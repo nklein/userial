@@ -1,5 +1,7 @@
+;; Copyright (c) 2011 nklein software
+;; MIT License. See included LICENSE.txt file for licensing details.
 
-# USerial v0.2.2011.02.21
+# USerial v0.3.2011.03.04
 
 Patrick Stein <pat@nklein.com>
 
