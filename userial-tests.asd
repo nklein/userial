@@ -3,7 +3,7 @@
 
 (asdf:defsystem :userial-tests
   :description "tests for userial serialization library"
-  :version "0.1.2010.12.26"
+  :version "0.3.2011.03.05"
   :author "Patrick Stein <pat@nklein.com>"
   :license "Public Domain"
   :depends-on ("userial" "nst")

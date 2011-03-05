@@ -4,7 +4,7 @@
 (asdf:defsystem :userial
   :description
     "userial: a serialization library for binary message encoding."
-  :version "0.1.2010.12.26"
+  :version "0.3.2011.03.05"
   :author "Patrick Stein <pat@nklein.com>"
   :license "Public Domain"
   :depends-on ("ieee-floats" "trivial-utf-8")
