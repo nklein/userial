@@ -6,10 +6,12 @@
     "userial: a serialization library for binary message encoding."
   :version "0.3.2011.03.05"
   :author "Patrick Stein <pat@nklein.com>"
-  :license "Public Domain"
+  :licence "MIT"
   :depends-on ("ieee-floats" "trivial-utf-8")
   :components ((:module "userial"
                 :serial t
 		:components ((:file "package")
 			     (:file "buffer")
-			     (:file "serialize")))))
+			     (:file "serialize")))
+	       (:static-file "README.mkdn")
+	       (:static-file "LICENSE.txt")))

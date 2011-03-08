@@ -5,7 +5,7 @@
   :description "tests for userial serialization library"
   :version "0.3.2011.03.05"
   :author "Patrick Stein <pat@nklein.com>"
-  :license "Public Domain"
+  :licence "MIT"
   :depends-on ("userial" "nst")
   :components ((:module "userial"
 		:components ((:module "tests"
