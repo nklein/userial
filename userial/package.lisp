@@ -25,4 +25,5 @@
 	   :unserialize
 	   :unserialize*
 	   :unserialize-let*
-	   :unserialize-list*))
+	   :unserialize-list*
+	   :serialize-log))
