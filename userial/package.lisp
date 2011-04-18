@@ -26,4 +26,6 @@
 	   :unserialize*
 	   :unserialize-let*
 	   :unserialize-list*
-	   :serialize-log))
+	   :serialize-log
+	   :peek
+	   :with-peek-buffer))
