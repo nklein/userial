@@ -353,6 +353,7 @@ following to serialize an instance `*person-instance*`.
 
 Similarly, one could then unserialize that data in either of the
 following ways.
+
     (unserialize-slots* (:string name
                          :uint8  age
                          :string hair-color)
