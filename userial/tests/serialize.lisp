@@ -6,14 +6,10 @@
 ;;; helper function that serializes and then unserializes a value
 (defun serialize-unserialize (tag value &optional (buffer-size 64))
   "Returns the value obtained from unserializing disptached by TAG on the result of rewinding a buffer of BUFFER-SIZE bytes that had VALUE serialized into it dispatched by TAG.  The hope is that the returned value will be equal to VALUE."
-  (nth-value
-     0
-     (unserialize tag
-		  :buffer
-		  (buffer-rewind
-		     :buffer
-		     (serialize tag value
-				:buffer (make-buffer buffer-size))))))
+  (let* ((buf (make-buffer buffer-size))
+	 (buf (serialize tag value :buffer buf))
+	 (buf (buffer-rewind :buffer buf)))
+    (nth-value 0 (unserialize tag :buffer buf))))
 
 ;;; an instance type of bounded arbitrary integers
 (nst:def-arbitrary-instance-type (bounded-integer :key ((low 0) (high 1)))
@@ -169,7 +165,29 @@
 						  (:eql :a)
 						  (:not (:equalp alice)))
     (let ((rr (serialize-unserialize :person-public alice)))
-      (list (person-name rr) (person-initial rr) rr))))
+      (list (person-name rr) (person-initial rr) rr)))
+  (nst:def-test test-serialize-slots* (:array-equalp (0 31))
+    (serialize-slots* (:alphas initial :uint8 age) alice
+		      :buffer (make-buffer 2)))
+  (nst:def-test test-serialize-accessor* (:array-equalp (0 31))
+    (serialize-accessors* (:alphas person-initial :uint8 person-age) alice
+			  :buffer (make-buffer 2)))
+  (nst:def-test test-unserialize-slots* (:equalp bob)
+    (let* ((buf (serialize :person-private bob :buffer (make-buffer)))
+	   (buf (buffer-rewind :buffer buf)))
+      (nth-value 0
+		 (unserialize-slots* (:string name :alphas initial :uint8 age)
+				     (make-person)
+				     :buffer buf))))
+  (nst:def-test test-unserialize-accessors* (:equalp bob)
+    (let* ((buf (serialize :person-private bob :buffer (make-buffer)))
+	   (buf (buffer-rewind :buffer buf)))
+      (nth-value 0
+		 (unserialize-accessors* (:string person-name
+					  :alphas person-initial
+					  :uint8  person-age) (make-person)
+					  :buffer buf)))))
+    
 
 ;;; prepare a buffer for testing unserializing
 (nst:def-fixtures unserialize-buffers

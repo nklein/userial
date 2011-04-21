@@ -22,7 +22,7 @@
     (declare (ignore buffer))
     (error "UNSERIALIZE not supported for type ~A" type)))
 
-(defmacro serialize* ((type value &rest rest) &key (buffer *buffer*))
+(defmacro serialize* ((type value &rest rest) &key (buffer '*buffer*))
   "SERIALIZE a list of TYPE + VALUE into BUFFER returning the final BUFFER.  For example:  (SERIALIZE* (:UINT8 5 :INT16 -10) :BUFFER BUFFER)"
   (if rest
       (let ((new-buffer (gensym "BUF-")))
@@ -30,7 +30,29 @@
 	   (serialize* ,rest :buffer ,new-buffer)))
       `(serialize ,type ,value :buffer ,buffer)))
 
-(defmacro unserialize* ((type place &rest rest) &key (buffer *buffer*))
+(defmacro serialize-slots* ((&rest type-slot-plist) object
+			    &key (buffer '*buffer*))
+  (let ((slots (loop :for ss :in (rest type-slot-plist) :by #'cddr
+		     :collecting ss)))
+    `(with-slots ,slots ,object
+       (serialize* ,type-slot-plist :buffer ,buffer))))
+
+(defmacro serialize-accessors* ((&rest type-accessor-plist) object
+				&key (buffer '*buffer*))
+  (multiple-value-bind (vars types accessors)
+      (loop :for ta :on type-accessor-plist :by #'cddr
+	    :collecting (gensym "SYMS-") :into vars
+	    :collecting (first ta) :into types
+	    :collecting (second ta) :into accessors
+	    :finally (return (values vars types accessors)))
+    (flet ((mappend (fn aas bbs)
+	     (reduce #'nconc (mapcar fn aas bbs))))
+      `(with-accessors ,(mapcar #'(lambda (vv aa) (list vv aa)) vars accessors)
+	   ,object
+	 (serialize* ,(mappend #'(lambda (tt vv) (list tt vv)) types vars)
+		     :buffer ,buffer)))))
+
+(defmacro unserialize* ((type place &rest rest) &key (buffer '*buffer*))
   "UNSERIALIZE a list of TYPE + PLACE from the given BUFFER and execute the body.  For example:  (LET (AA BB) (UNSERIALIZE* (:UINT8 AA :INT16 BB) :BUFFER BUFFER (LIST AA BB)))"
   (let ((pp (gensym "PLACE-"))
 	(pk (gensym "BUF-")))
@@ -39,6 +61,39 @@
        (values (setf ,place ,pp) ,pk)
        ,@(when rest
 	    `((unserialize* ,rest :buffer ,pk))))))
+
+(defmacro unserialize-slots* ((&rest type-slot-plist) object
+			      &key (buffer '*buffer*))
+  (let ((slots (loop :for ss :in (rest type-slot-plist) :by #'cddr
+		     :collecting ss))
+	(obj-sym (gensym "OBJECT-"))
+	(buf-sym (gensym "BUFFER-")))
+    `(let ((,obj-sym ,object)
+	   (,buf-sym ,buffer))
+       (with-slots ,slots ,obj-sym
+	 (unserialize* ,type-slot-plist :buffer ,buf-sym))
+       (values ,obj-sym ,buf-sym))))
+
+(defmacro unserialize-accessors* ((&rest type-accessor-plist) object
+				  &key (buffer '*buffer*))
+  (multiple-value-bind (vars types accessors)
+      (loop :for ta :on type-accessor-plist :by #'cddr
+	    :collecting (gensym "SYMS-") :into vars
+	    :collecting (first ta) :into types
+	    :collecting (second ta) :into accessors
+	    :finally (return (values vars types accessors)))
+    (flet ((mappend (fn aas bbs)
+	     (reduce #'nconc (mapcar fn aas bbs))))
+      (let ((obj-sym (gensym "OBJECT-"))
+	    (buf-sym (gensym "BUFFER-")))
+      `(let ((,obj-sym ,object)
+	     (,buf-sym ,buffer))
+	 (with-accessors ,(mapcar #'(lambda (vv aa) (list vv aa))
+				  vars accessors)
+	     ,obj-sym
+	   (unserialize* ,(mappend #'(lambda (tt vv) (list tt vv)) types vars)
+			 :buffer ,buf-sym))
+	 (values ,obj-sym ,buf-sym))))))
 
 (defmacro unserialize-let* ((type var &rest rest) buffer &body body)
   "UNSERIALIZE a list of TYPE + VARIABLE-NAME from the given BUFFER and execute the body.  For example:  (UNSERIALIZE-LET* (:UINT8 AA :INT16 BB) :buffer BUFFER (LIST AA BB))"
@@ -287,24 +342,23 @@
 				       (cons (first fields) types)
 				       (cons (second fields) slots))))))
     (multiple-value-bind (types slots) (get-types-and-slots fields)
-      (let ((obj-sym (gensym "OBJ-")))
-	`(progn
-	   (defmethod serialize ((type (eql ,type)) value
-				 &key (buffer *buffer*))
-	     (with-slots ,slots value
-	       ,@(mapcar #'(lambda (type slot)
-			     `(serialize ,type ,slot :buffer buffer))
-			 types slots))
-	     buffer)
-	   (defmethod unserialize ((type (eql ,type))
-				   &key (buffer *buffer*))
-	     (let ((,obj-sym ,factory))
-	       (with-slots ,slots ,obj-sym
-		 ,@(mapcar #'(lambda (type slot)
-			       `(setf ,slot (unserialize ,type
-							 :buffer buffer)))
-			   types slots))
-	       (values ,obj-sym buffer))))))))
+      `(progn
+	 (defmethod serialize ((type (eql ,type)) value
+			       &key (buffer *buffer*))
+	   (with-slots ,slots value
+	     ,@(mapcar #'(lambda (type slot)
+			   `(serialize ,type ,slot :buffer buffer))
+		       types slots))
+	   buffer)
+	 (defmethod unserialize ((type (eql ,type))
+				 &key (buffer *buffer*)
+				 (object ,factory))
+	   (with-slots ,slots object
+	     ,@(mapcar #'(lambda (type slot)
+			   `(setf ,slot (unserialize ,type
+						     :buffer buffer)))
+		       types slots))
+	   (values object buffer))))))
 
 (defmacro make-accessor-serializer (type factory (&rest fields))
   "Make a serialize/unserialize pair with given TYPE using the FACTORY
@@ -326,26 +380,24 @@
 					   (cons (gensym "ACC-") syms))))))
     (multiple-value-bind (types accessors syms)
 	(get-types-and-accessors fields)
-      (let ((obj-sym (gensym "OBJ-")))
-	`(progn
-	   (defmethod serialize ((type (eql ,type)) value
-				 &key (buffer *buffer*))
-	     (with-accessors ,(mapcar #'(lambda (sym accessor)
-					  `(,sym ,accessor))
-				      syms accessors)
-		 value
-	       ,@(mapcar #'(lambda (type sym)
-			     `(serialize ,type ,sym :buffer buffer))
-			 types syms))
-	     buffer)
-	   (defmethod unserialize ((type (eql ,type))
-				   &key (buffer *buffer*))
-	     (let ((,obj-sym ,factory))
-	       (with-accessors ,(mapcar #'(lambda (sym accessor)
-					    `(,sym ,accessor))
-					syms accessors)
-		   ,obj-sym
-		 ,@(mapcar #'(lambda (type sym)
-			       `(setf ,sym (unserialize ,type :buffer buffer)))
-			   types syms))
-	       (values ,obj-sym buffer))))))))
+      `(progn
+	 (defmethod serialize ((type (eql ,type)) value
+			       &key (buffer *buffer*))
+	   (with-accessors ,(mapcar #'(lambda (sym accessor)
+					`(,sym ,accessor))
+				    syms accessors)
+	       value
+	     ,@(mapcar #'(lambda (type sym)
+			   `(serialize ,type ,sym :buffer buffer))
+		       types syms))
+	   buffer)
+	 (defmethod unserialize ((type (eql ,type))
+				 &key (buffer *buffer*)
+				      (object ,factory))
+	   (with-accessors ,(mapcar #'(lambda (sym accessor)
+					`(,sym ,accessor))
+				    syms accessors) object
+	     ,@(mapcar #'(lambda (type sym)
+			   `(setf ,sym (unserialize ,type :buffer buffer)))
+		       types syms))
+	   (values object buffer))))))

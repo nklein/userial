@@ -22,10 +22,14 @@
 	   :make-accessor-serializer
 	   :serialize
 	   :serialize*
+	   :serialize-slots*
+	   :serialize-accessors*
 	   :unserialize
 	   :unserialize*
 	   :unserialize-let*
 	   :unserialize-list*
+	   :unserialize-accessors*
+	   :unserialize-slots*
 	   :serialize-log
 	   :peek
 	   :with-peek-buffer))
