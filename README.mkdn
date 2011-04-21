@@ -1,7 +1,7 @@
 ;; Copyright (c) 2011 nklein software
 ;; MIT License. See included LICENSE.txt file for licensing details.
 
-# USerial v0.4.2011.04.11
+# USerial v0.5.2011.04.21
 
 Patrick Stein <pat@nklein.com>
 
@@ -336,6 +336,39 @@ buffer as the second value.
     (unserialize-list* (:opcode :string :string :login-flags)
                        :buffer buffer)
 
+For items in classes or structs, one can serialize and unserialize
+them using slots or accessors.  If one had a `person` struct with
+slots `name`, `age`, and `hair-color`, one might do either of the
+following to serialize an instance `*person-instance*`.
+
+    (serialize-slots* (:string name
+                       :uint8  age
+                       :string hair-color)
+         *person-instance* :buffer buffer)
+                      
+    (serialize-accessors* (:string person-name
+                           :uint8  person-age
+                           :string person-hair-color)
+         *person-instance* :buffer buffer)
+
+Similarly, one could then unserialize that data in either of the
+following ways.
+    (unserialize-slots* (:string name
+                         :uint8  age
+                         :string hair-color)
+         *person-instance* :buffer buffer)
+                      
+    (unserialize-accessors* (:string person-name
+                             :uint8  person-age
+                             :string person-hair-color)
+         *person-instance* :buffer buffer)
+
+The `unserialize-slots*` and `unserialize-accessors*` return
+the object as the first return value and the buffer as the
+second return value.  One can reasonably use `(make-person)`
+or some other factory in place of the `*person-instance*` in
+the above examples.
+                               
 ### <a name="define-serializers">Defining New Serializers</a>
 
 Almost every protocol requires the encoding and decoding of
@@ -458,6 +491,14 @@ buffer using the key.
 
     CL-USER> (u-s :person-public *p*)
     #S(PERSON :NAME "Patrick" :AGE :UNKNOWN :COLOR "Green")
+    
+The above examples make use of the factory form provided to
+the `make-slot-serializer` and `make-accessor-serializer` macros.
+One can forgo instantiating a new object and use an existing
+instance with the generated unserializers giving the instance
+with the `:object` keyword.
+
+    (unserialize :person-public :buffer buf :object *p*)
 
 ### <a name="predefined-serializers">Pre-defined Serializers</a>
 
