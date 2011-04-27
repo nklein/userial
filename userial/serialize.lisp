@@ -327,6 +327,19 @@
 		          :collect (svref (vector ,@choices) ii))
 		 buffer))))))
 
+(defmacro make-simple-serializer (type factory (&rest pairs))
+  `(progn
+     (defmethod userial:serialize ((type (eql ,type)) object
+                           &key (buffer *buffer*)
+                           &allow-other-keys)
+       (userial:serialize* ,pairs :buffer buffer))
+     (defmethod userial:unserialize ((type (eql ,type))
+                             &key (buffer *buffer*)
+                                  (object ,factory)
+                             &allow-other-keys)
+       (userial:unserialize* ,pairs :buffer buffer)
+       (values object buffer))))
+
 (defmacro make-slot-serializer (type factory (&rest fields))
   "Make a serialize/unserialize pair with given TYPE using the FACTORY
    form when a new instance is needed where FIELDS is a list of

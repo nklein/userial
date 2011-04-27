@@ -13,7 +13,6 @@
 		:components ((:file "package")
 			     (:file "buffer")
 			     (:file "serialize")
-			     (:file "peek")
-			     (:file "log")))
+			     (:file "peek")))
 	       (:static-file "README.mkdn")
 	       (:static-file "LICENSE.txt")))

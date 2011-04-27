@@ -17,7 +17,6 @@ Patrick Stein <pat@nklein.com>
   + [Serializing and Unserializing Multiple Items](#serialize*)
   + [Defining New Serializers](#define-serializers)
   + [Pre-defined Serializers](#predefined-serializers)
-* [Logging](#logging)
 * [Sample Application: Game Protocol](#protocol)
   + [Opcodes](#opcodes)
   + [Logging In](#login)
@@ -537,21 +536,6 @@ serializer for encoding an option that will be either `nil` or `t`.
   [ieee]: http://common-lisp.net/project/ieee-floats/
   [utf]: http://common-lisp.net/project/trivial-utf-8/
   
-## <a name="logging">Logging</a>
-
-For various applications, it may be useful to log serialized messages.
-The userial library provides a simple way to do that with the
-`serialize-log` macro.  The `serialize-log` macro takes a
-`category` and arguments for `serialize*` and invokes a logger
-(if one is available) with the serialized information.  [Currently,
-`cl-log` is the only supported logging system since it is the only
-one that I am certain will accept binary messages.]
-
-For example, if one wanted to log an integer and two strings in the
-logging category `:packet` one might do the following:
-
-    (serialize-log :packet :int32 the-int :string s1 :string s2)
-
 ## <a name="protocol">Sample Application: Game Protocol</a>
 
 This example shows how one might use the tools above to serialize

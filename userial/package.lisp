@@ -18,6 +18,7 @@
 	   :make-enum-serializer
 	   :make-bitfield-serializer
 	   :make-float-serializer
+           :make-simple-serializer
 	   :make-slot-serializer
 	   :make-accessor-serializer
 	   :serialize
