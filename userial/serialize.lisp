@@ -327,18 +327,20 @@
 		          :collect (svref (vector ,@choices) ii))
 		 buffer))))))
 
-(defmacro make-simple-serializer (type factory (&rest pairs))
+(defmacro make-simple-serializer (type (var factory) (&rest pairs))
   `(progn
-     (defmethod userial:serialize ((type (eql ,type)) object
+     (defmethod userial:serialize ((type (eql ,type)) value
                            &key (buffer *buffer*)
                            &allow-other-keys)
-       (userial:serialize* ,pairs :buffer buffer))
+       (let ((,var value))
+         (userial:serialize* ,pairs :buffer buffer)))
      (defmethod userial:unserialize ((type (eql ,type))
                              &key (buffer *buffer*)
                                   (object ,factory)
                              &allow-other-keys)
-       (userial:unserialize* ,pairs :buffer buffer)
-       (values object buffer))))
+       (let ((,var object))
+         (userial:unserialize* ,pairs :buffer buffer)
+         (values ,var buffer)))))
 
 (defmacro make-slot-serializer (type factory (&rest fields))
   "Make a serialize/unserialize pair with given TYPE using the FACTORY
@@ -414,3 +416,22 @@
 			   `(setf ,sym (unserialize ,type :buffer buffer)))
 		       types syms))
 	   (values object buffer))))))
+
+(defmacro make-list-serializer (type element-type)
+  "Make a serialize/unserialize pair for the key TYPE where each element is serialized with the key ELEMENT-TYPE."
+  `(progn
+     (defmethod userial:serialize ((type (eql ,type)) value
+                                   &key (buffer *buffer*))
+       (declare (type list value))
+       (let ((len (length value)))
+         (userial:serialize :uint32 len :buffer buffer)
+         (dolist (ee value)
+           (userial:serialize ,element-type ee :buffer buffer)))
+       buffer)
+     (defmethod userial:unserialize ((type (eql ,type))
+                                     &key (buffer *buffer*))
+       (userial:unserialize-let* (:uint32 len) buffer
+         (values (loop :for ii :from 1 :to len
+                    :collecting (userial:unserialize ,element-type
+                                                     :buffer buffer))
+                 buffer)))))

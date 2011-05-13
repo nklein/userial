@@ -1,7 +1,7 @@
 ;; Copyright (c) 2011 nklein software
 ;; MIT License. See included LICENSE.txt file for licensing details.
 
-# USerial v0.5.2011.04.21
+# USerial v0.6.2011.05.12
 
 Patrick Stein <pat@nklein.com>
 
@@ -499,6 +499,14 @@ instance with the generated unserializers giving the instance
 with the `:object` keyword.
 
     (unserialize :person-public :buffer buf :object *p*)
+    
+One can also define a serialize/unserialize pair for a list
+where each item uses the same serializer.  For example, one
+can do the following:
+
+    (make-list-serializer :string-list :string)
+    (serialize :string-list (list "a" "b" "c" "d") :buffer buffer)
+
 
 ### <a name="predefined-serializers">Pre-defined Serializers</a>
 

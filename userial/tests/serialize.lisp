@@ -89,6 +89,20 @@
 						:buffer
 						(make-buffer 8)))))))
 
+;;; prepare a list type for testing
+(make-list-serializer :colors-list :colors)
+
+(nst:def-test-group test-list-serializer ()
+  (nst:def-test serialize-color-list (:equalp '((:red)
+                                                (:green)
+                                                nil
+                                                (:orange :blue)))
+    (serialize-unserialize :colors-list
+                           (list :red
+                                 (list :green)
+                                 nil
+                                 (list :blue :orange)))))
+
 ;;; check that strings and raw-byte arrays encode as expected
 (nst:def-test-group test-string-and-byte-serializing ()
   (:documentation "Test that strings and raw-byte arrays serialize

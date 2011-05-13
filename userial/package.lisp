@@ -21,6 +21,7 @@
            :make-simple-serializer
 	   :make-slot-serializer
 	   :make-accessor-serializer
+           :make-list-serializer
 	   :serialize
 	   :serialize*
 	   :serialize-slots*
