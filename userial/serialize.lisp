@@ -255,54 +255,40 @@
 (define-serializer (:raw-bytes value buffer
                     :extra ((start 0) (end (length value))))
   (declare (type (vector (unsigned-byte 8)) value))
-  (assert (<= 0 start end (1- (length value))))
+  (assert (<= 0 start end (length value)))
   (let ((length (- end start))
         (buf-start (buffer-length :buffer buffer)))
     (buffer-advance :amount length :buffer buffer)
     (setf (subseq buffer buf-start (buffer-length :buffer buffer))
           (subseq value start end))))
+(define-unserializer (:raw-bytes buffer
+                      :extra (output (start 0) (end (length output))))
+  (assert (<= 0 start end))
+  (let* ((length (- end start))
+         (buf-start (buffer-length :buffer buffer))
+         (output (or output
+                     (make-array (list length)
+                                 :initial-element 0
+                                 :element-type '(unsigned-byte 8)))))
+    (declare (type (vector (unsigned-byte 8)) output))
+    (assert (<= end (length output)))
+    (buffer-advance :amount length :buffer buffer)
+    (setf (subseq output start end)
+          (subseq buffer buf-start (buffer-length :buffer buffer)))
+    output))
   
 ;;; byte arrays with size
 (define-serializer (:bytes value buffer)
   (declare (type (vector (unsigned-byte 8)) value))
-  (labels ((add-bytes (value start end buffer)
-	     (let* ((length    (- end start))
-		    (buf-start (buffer-length :buffer buffer)))
-	       (buffer-advance :amount length :buffer buffer)
-	       (setf (subseq buffer buf-start (buffer-length :buffer buffer))
-		     (subseq value start end))))
-	   (do-segment (value start buffer)
-	     (let ((end (position 237 value :start start)))
-	       (cond
-		 ((null end) (add-bytes value start (length value) buffer))
-		 (t          (add-bytes value start (1+ end) buffer)
-			     (buffer-add-byte 237 :buffer buffer)
-			     (do-segment value (1+ end) buffer))))))
-    (do-segment value 0 buffer)
-    (buffer-add-byte 237 :buffer buffer)
-    (buffer-add-byte   0 :buffer buffer)))
+  (serialize :uint (length value) :buffer buffer)
+  (serialize :raw-bytes value :buffer buffer))
 
 (define-unserializer (:bytes buffer)
-  (labels ((add-segment (buffer start end output)
-	     (let* ((length (- end start))
-		    (out-start (buffer-length :buffer output)))
-	       (buffer-advance :amount length :buffer output)
-	       (setf (subseq output out-start (buffer-length :buffer output))
-		     (subseq buffer start end))))
-	   (do-segment (buffer start output)
-	     (let ((end (position 237 buffer :start start)))
-	       (case (elt buffer (1+ end))
-		 (237 (add-segment buffer start (1+ end) output)
-		      (do-segment buffer (+ end 2) output))
-		 (  t (add-segment buffer start end output)
-		      (+ end 2))))))
-    (let ((output (make-buffer))
-	  (start (buffer-length :buffer buffer)))
-      ;; temporarily set buffer length to whole capacity
-      ;; then, set buffer length to be the return of #'do-segment
-      (setf (buffer-length :buffer buffer) (buffer-capacity :buffer buffer))
-      (setf (buffer-length :buffer buffer) (do-segment buffer start output))
-      (values output buffer))))
+  (unserialize-let* (:uint length) buffer
+    (let ((value (make-array (list length)
+                             :initial-element 0
+                             :element-type '(unsigned-byte 8))))
+      (unserialize :raw-bytes :buffer buffer :output value))))
 
 ;;; string handling
 (define-serializer (:string value buffer)

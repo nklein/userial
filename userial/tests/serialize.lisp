@@ -31,22 +31,27 @@
 ;;; test various unsigned integer encode/decode routines
 (nst:def-test-group test-uint-serializing ()
   (:documentation "Test the various standard unsigned-int serialize/unserialize routines.")
-  (nst:def-test serialize-uint8  (:sample-ints :uint8  0 256))
-  (nst:def-test serialize-uint16 (:sample-ints :uint16 0 65536))
-  (nst:def-test serialize-uint24 (:sample-ints :uint24 0 16777216))
-  (nst:def-test serialize-uint32 (:sample-ints :uint32 0 4294967296))
-  (nst:def-test serialize-uint48 (:sample-ints :uint48 0 281474976710656))
-  (nst:def-test serialize-uint64 (:sample-ints :uint64 0 18446744073709551616))
-)
+  (nst:def-test serialize-uint8  (:sample-ints :uint8  0 #.(expt 2 8)))
+  (nst:def-test serialize-uint16 (:sample-ints :uint16 0 #.(expt 2 16)))
+  (nst:def-test serialize-uint24 (:sample-ints :uint24 0 #.(expt 2 24)))
+  (nst:def-test serialize-uint32 (:sample-ints :uint32 0 #.(expt 2 32)))
+  (nst:def-test serialize-uint48 (:sample-ints :uint48 0 #.(expt 2 48)))
+  (nst:def-test serialize-uint64 (:sample-ints :uint64 0 #.(expt 2 64)))
+  (nst:def-test serialize-uint   (:sample-ints :uint   0 #.(expt 2 128))))
 
 ;;; test various signed integer encode/decode routines
 (nst:def-test-group test-int-serializing ()
   (:documentation "Test the various standard signed-int serialize/unserialize routines.")
-  (nst:def-test serialize-int8  (:sample-ints :int8  -128 128))
-  (nst:def-test serialize-int16 (:sample-ints :int16 -32768 32768))
-  (nst:def-test serialize-int32 (:sample-ints :int32 -2147483648 2147483648))
-  (nst:def-test serialize-int64 (:sample-ints :int64 -9223372036854775808
-					              9223372036854775808)))
+  (nst:def-test serialize-int8  (:sample-ints :int8  #.(- (expt 2 7))
+                                                     #.(expt 2 7)))
+  (nst:def-test serialize-int16 (:sample-ints :int16 #.(- (expt 2 15))
+                                                     #.(expt 2 15)))
+  (nst:def-test serialize-int32 (:sample-ints :int32 #.(- (expt 2 31))
+                                                     #.(expt 2 31)))
+  (nst:def-test serialize-int64 (:sample-ints :int64 #.(- (expt 2 63))
+                                                     #.(expt 2 63)))
+  (nst:def-test serialize-int   (:sample-ints :int   #.(- (expt 2 127))
+                                                     #.(expt 2 127))))
 
 ;;; define a criterion that makes sure the test-form is an array of
 ;;; unsigned bytes that are equal to the given list of bytes
@@ -107,22 +112,43 @@
 (nst:def-test-group test-string-and-byte-serializing ()
   (:documentation "Test that strings and raw-byte arrays serialize
                    as expected")
-  (nst:def-test serialize-ascii-string (:array-equalp (70 111 111 237 0))
-    (serialize :string "Foo" :buffer (make-buffer 5)))
+  (nst:def-test serialize-ascii-string (:array-equalp (3 70 111 111))
+    (serialize :string "Foo" :buffer (make-buffer 4)))
   #+sbcl
-  (nst:def-test serialize-utf8-string (:array-equalp (70 111 226 152 186 237 0))
-    (serialize :string "Fo☺" :buffer (make-buffer 7)))
+  (nst:def-test serialize-utf8-string (:array-equalp (5 70 111 226 152 186))
+    (serialize :string "Fo☺" :buffer (make-buffer 6)))
   (nst:def-test serialize-byte-array (:array-equalp
-				         (70 111 111 237 237 0 237 0))
+				         (4 3 70 111 111))
     (serialize :bytes (serialize :string "Foo" :buffer (make-buffer 5))
-	       :buffer (make-buffer 8)))
+	       :buffer (make-buffer 5)))
+  (nst:def-test serialize-raw-byte-array (:array-equalp
+                                             (3 70 111 111))
+    (serialize :raw-bytes (serialize :string "Foo" :buffer (make-buffer 4))
+	       :buffer (make-buffer 4)))
   #+does-not-work-yet (nst:def-test serialize-unserialize-strings
 			  (:sample-strings :string))
   (nst:def-test unserialize-ascii-string (:equal "Foo")
     (serialize-unserialize :string "Foo"))
   #+sbcl
   (nst:def-test unserialize-utf8-string (:equal "Fo☺")
-    (serialize-unserialize :string "Fo☺")))
+    (serialize-unserialize :string "Fo☺"))
+  (nst:def-test unserialize-raw-byte-array (:array-equalp
+                                               (3 70 111 111))
+    (with-buffer (make-buffer 4)
+      (serialize :string "Foo")
+      (buffer-rewind)
+      (nth-value 0
+                 (unserialize :raw-bytes
+                              :output (make-array '(4)
+                                                  :initial-element 0
+                                                  :element-type
+                                                  '(unsigned-byte 8))))))
+  (nst:def-test unserialize-raw-byte-array-by-size (:array-equalp
+                                                       (3 70 111 111))
+    (with-buffer (make-buffer 4)
+      (serialize :string "Foo")
+      (buffer-rewind)
+      (nth-value 0 (unserialize :raw-bytes :end 4)))))
 
 ;;; test serializing sequences of things
 (nst:def-test-group test-serialize* ()

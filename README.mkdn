@@ -621,7 +621,16 @@ USerial library uses the [ieee-float library][ieee] to encode
 and decode floating point numbers.
 
 For arbitrary byte sequences, the USerial library defines the
-`:bytes` serializer.
+`:bytes` serializer.  These are encoded as a `:uint` length
+and then the raw bytes.  To include a raw sequence of bytes
+in the serialization without the length ahead of it, one can
+use the `:raw-bytes` serializer.
+
+    (serialize :raw-bytes byte-array
+               &key buffer (start 0) (end (length bytes-array)))
+    
+    (unserialize :raw-bytes byte-array
+               &key buffer output (start 0) (end (length output)))
 
 For strings, the USerial library defines the `:string` serializer for
 encoding strings as UTF-8 encoded sequences of arbitrary length.  The
