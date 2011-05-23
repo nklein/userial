@@ -326,7 +326,7 @@
                                  :extra ((,value ,factory) ,@extra))
        (unserialize* ,pairs :buffer ,buffer))))
 
-(defmacro make-slot-serializer ((type value buffer factory &key layer extra)
+(defmacro make-slot-serializer ((type value buffer factory &key layer)
                                 &rest fields)
   "Make a serialize/unserialize pair with given TYPE using the FACTORY
    form when a new instance is needed where FIELDS is a list of
@@ -335,16 +335,16 @@
       (make-slot-serializer (:person person buffer (make-person))
           :string name :uint8 age)"
   `(progn
-     (define-serializer (,type ,value ,buffer :layer ,layer :extra ,extra)
+     (define-serializer (,type ,value ,buffer :layer ,layer)
        (serialize-slots* ,fields ,value :buffer ,buffer))
      (define-unserializer (,type ,buffer
                                  :layer ,layer
-                                 :extra ((,value ,factory) ,@extra))
+                                 :extra ((,value ,factory)))
        (unserialize-slots* ,fields ,value :buffer ,buffer)
        ,value)))
 
 (defmacro make-accessor-serializer ((type value buffer factory
-                                     &key layer extra)
+                                     &key layer)
                                     &rest fields)
   "Make a serialize/unserialize pair with given TYPE using the FACTORY
    form when a new instance is needed where FIELDS is a list of
@@ -353,11 +353,11 @@
       (make-accessor-serializer (:person person buffer (make-person))
           :string person-name :uint8 person-age)"
   `(progn
-     (define-serializer (,type ,value ,buffer :layer ,layer :extra ,extra)
+     (define-serializer (,type ,value ,buffer :layer ,layer)
        (serialize-accessors* ,fields ,value :buffer ,buffer))
      (define-unserializer (,type ,buffer
                                  :layer ,layer
-                                 :extra ((,value ,factory) ,@extra))
+                                 :extra ((,value ,factory)))
        (unserialize-accessors* ,fields ,value :buffer ,buffer)
        ,value)))
 

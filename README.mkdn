@@ -13,7 +13,7 @@ Patrick Stein <pat@nklein.com>
   + [Manipulating and Querying Buffer Sizes](#buffer-manip)
   + [Adding and Retrieving Bytes](#add-byte)
 * [Serializing and Unserializing](#serializing)
-  + [Serializing and Unserializing](#serializing)
+  + [Serializing and Unserializing](#serialize)
   + [Serializing and Unserializing Multiple Items](#serialize*)
   + [Defining New Serializers](#define-serializers)
   + [Pre-defined Serializers](#predefined-serializers)
@@ -36,6 +36,50 @@ creating serializers and the serializers that the library provides
 out of the box.  The ["Sample Application: Game Protocol" section](#protocol)
 below describes how one might put all of these functions to use in
 preparing network packets for a simple game.
+
+The USerial library uses the [ContextL][contextl] library to
+provide versioned serialization.  The ContextL library allows
+one to define layers and then define functions within those layers.
+The `serialize` and `unserialize` functions in the USerial library
+are ContextL layered functions.  As such, one can define a
+hierarchy of ContextL layers and define serialize functions for
+different items at different points in the hierarchy.
+
+  [context]: http://common-lisp.net/project/closer/contextl.html
+  
+For example, suppose one wanted to implement versions 1.0, 1.1, and
+1.0.1 with both 1.1 and 1.0.1 extending 1.0 but unrelated to each
+other.  One could use ContextL's `deflayer` macro as follows:
+
+    (deflayer :v1.0)
+    (deflayer :v1.1   (:v1.0))
+    (deflayer :v1.0.1 (:v1.0))
+
+Then, one could use the USerial library's `make-list-serializer` macro
+to create a serializer that encodes a list of integers as a list of
+16-bit integers in version 1.0 and as a list of 32-bit integers in
+version 1.1.  (This assumes one has serializers already for `:int16`
+and `:int32` which USerial has by default.)
+
+    (make-list-serializer :list-of-int :int16 :layer :v1.0)
+    (make-list-serializer :list-of-int :int32 :layer :v1.1)
+
+Then, the appropriate serialization would occur depending on
+which layer is activated in ContextL.
+
+    (with-active-layers (:v1.0)
+      (serialize :list-of-int '(3 4 5))) => encoded as :int16
+      
+    (with-active-layers (:v1.0.1)
+      (serialize :list-of-int '(3 4 5))) => encoded as :int16
+    
+    (with-active-layers (:v1.1)
+      (serialize :list-of-int '(3 4 5))) => encoded as :int32
+
+Note: if versioning is not yet a consideration, one can omit the
+`layer` keyword parameter to the `make-list-serializer` to simply
+define the default serializer and unserializer for the `:list-of-int`
+type.
 
 ## <a name="buffer-handling">Buffer Handling</a>
 
@@ -204,9 +248,9 @@ the current fill pointer and advance the fill pointer.
 
 The ultimate purpose of the USerial library is to allow one to
 serialize and unserialize data.  To this end, the library defines two
-generic functions that dispatch on a keyword parameter.  These generic
-functions are described in the
-["Serializing and Unserializing" section](#serializing) below.
+generic functions that dispatch on a keyword parameter.  These
+ContextL layered functions are described in the
+["Serializing and Unserialize Layered Functions" section](#serialize) below.
 
 There are some macros that facilitate serializing and unserializing
 sequences of items.  These macros are described in the
@@ -222,32 +266,31 @@ There are a variety of pre-defined `serialize` and `unserialize` methods.
 These are describe in the ["Pre-defined Serializers"](#predefined-serializers)
 section below.
 
-## <a name="serialize">Serialize and Unserialize Generics</a>
+### <a name="serialize">Serialize and Unserialize Layered Functions</a>
 
-The generic function used to serialize items takes a keyword
-as its first parameter, a value as its second parameter, and
-an optional buffer.  The keyword is used to dispatch the
-appropriate implementation of the function for the given value.
-The serialize methods serialize the value into the buffer and
-return the buffer.
+The ContextL layered function used to serialize items takes a keyword
+as its first parameter, a value as its second parameter, and an
+optional buffer.  The keyword is used to dispatch the appropriate
+implementation of the function for the given value.  The serialize
+methods serialize the value into the buffer and return the buffer.
 
-    (ftype (function (symbol &key (:buffer buffer) &allow-other-keys)
+    (ftype (function (symbol t &key (:buffer buffer) &allow-other-keys)
                      buffer)
            serialize)
-    (defgeneric serialize (keyword value &key (buffer *buffer*)
-                                         &allow-other-keys))
+    (define-layered-method serialize
+       (keyword value &key (buffer *buffer*) &allow-other-keys))
 
-The generic function used to unserialize items takes a
-keyword as its first parameter and an optional buffer.
-The keyword is used to dispatch the appropriate implementation
-of the function.  The unserialize methods unserialize a value
-from the buffer and return the value and buffer.
+The ContextL layered function used to unserialize items takes a
+keyword as its first parameter and an optional buffer.  The keyword is
+used to dispatch the appropriate implementation of the function.  The
+unserialize methods unserialize a value from the buffer and return the
+value and buffer.
 
     (ftype (function (symbol &key (:buffer buffer) &allow-other-keys)
                      (values t buffer))
            unserialize)
-    (defgeneric unserialize (keyword &key (buffer *buffer*)
-                                     &allow-other-keys))
+    (define-layered-function unserialize
+       (keyword &key (buffer *buffer*) &allow-other-keys))
 
 ### <a name="serialize*">Serializing and Unserializing Multiple Items</a>
 
@@ -371,6 +414,49 @@ the above examples.
                                
 ### <a name="define-serializers">Defining New Serializers</a>
 
+This section describes some macros available for creating serialize
+and unserialize methods.  Many of these macros allow keyword
+parameters `layer` and `extra`.  If the `layer` keyword parameter is
+given, then the serializer and unserializer generated will be in the
+ContextL layer specified.  If the `extra` keyword parameter is given,
+those extra keywords are available for the serializer and
+unserializer.  This will be more clear after some examples.
+
+At the most basic level, one can define a serializer using the
+`define-serializer` macro and the corresponding unserializer using
+`define-unserializer`.
+
+    (define-serializer (key value buffer &key layer extra)
+      ...body...)
+    (define-unserializer (key buffer &key layer extra)
+      ...body...)
+    
+For example, assuming there is already a `:float32` encoder, one might
+define a serializer that serializes a vector's offset from a specified
+reference point and define an unserializer that does the inverse given
+the same reference point.
+
+    (define-serializer (:offset-vector point buffer :extra (reference))
+       (serialize* (:float32 (- (vec-x point) (vec-x reference))
+                    :float32 (- (vec-y point) (vec-y reference)))
+          :buffer buffer))
+          
+    (define-unserializer (:offset-vector buffer :extra (reference))
+       (unserialize-let* (:float32 dx :float32 dy) buffer
+          (make-vec :x (+ (vec-x reference) dx)
+                    :y (+ (vec-y reference) dy))))
+
+If version `:v2.0` extended vectors to three dimensions, then one
+would could add an additional serializer in layer `:v2.0`.
+
+    (define-serializer (:offset-vector point buffer
+                                       :layer :v2.0
+                                       :extra (reference))
+       (serialize* (:float32 (- (vec-x point) (vec-x reference))
+                    :float32 (- (vec-y point) (vec-y reference))
+                    :float32 (- (vec-z point) (vec-z reference)))
+          :buffer buffer))
+
 Almost every protocol requires the encoding and decoding of
 integer values.  To make it easy to create as many of these
 types as one's application requires, the USerial library defines
@@ -379,19 +465,20 @@ an integer that is a given number of bytes long.  The macro
 takes two arguments: the key used to specify the method
 and an integer number of bytes.
 
-    (defmacro make-int-serializer (key bytes))
+    (make-int-serializer key bytes &key layer)
 
 For example, to make serialize and unserialize methods for
-signed bytes and signed quadwords, one could simply call:
+signed bytes and signed quadwords with signed quadwords only
+available when layer `:v1.2` is active, one could simply call:
 
     (make-int-serializer :signed-byte 1)
-    (make-int-serializer :signed-quadword 8)
+    (make-int-serializer :signed-quadword 8 :layer :v1.2)
 
 Similarly, if one wanted to create serialize and unserialize
 methods for unsigned bytes and unsigned doublewords, one could
 use the following macro:
 
-    (defmacro make-uint-serializer (key bytes))
+    (make-uint-serializer key bytes &key layer)
     (make-uint-serializer :unsigned-byte 1)
     (make-uint-serializer :unsigned-doubleword 4)
     
@@ -407,7 +494,7 @@ macro which takes a key used to specify the method, a lisp type for the
 floating point number, a constant number of bytes for the encoded
 values, an encoder, and a decoder.
 
-    (make-float-serializer (key type bytes encoder decoder))
+    (make-float-serializer key type bytes encoder decoder &key layer)
 
 For example, the following would create serializers that
 encode rational numbers (technically not floating point, I know)
@@ -424,8 +511,8 @@ acceptable) and enumerations (to represent choices where only a single
 selection can be made).  These macros take a keyword used to specify the
 method and a list of choices.
 
-    (make-bitfield-serializer :wants (:coffee :tea :sega))
-    (make-enum-serializer :direction (:left :right :up :down))
+    (make-bitfield-serializer :wants (:coffee :tea :sega) &key layer)
+    (make-enum-serializer :direction (:left :right :up :down) &key layer)
 
 With the bit field serializer, one can specify a single option
 or a list of zero or more options.  With the enumeration serializer,
@@ -459,15 +546,22 @@ One could create the following serialize and unserialize pairs to
 allow encoding the data for internal use (where all data is available)
 or for public use (where the age is kept secret).
 
-    (make-slot-serializer :person-internal
-                          (make-person)
-                          (:string name
-                           :uint8 age
-                           :string color))
-    (make-accessor-serializer :person-public
-                              (make-person :age :unknown)
-                              (:string person-name
-                               :string person-color))
+    (make-slot-serializer (:person-internal pp buffer (make-person))
+      :string name :uint8 age :string color)
+    (make-accessor-serializer (:person-public pp buffer
+                                              (make-person :age :unknown))
+      :string person-name :string person-color)
+
+An optional `layer` keyword argument can be given following the four
+required parts of the opening form of each of those macros.  The
+fourth item in the opening form of each of those macros is a factory
+used in the unserializer to create a new instance of a person if one
+is not given.  The second item in the opening form of each of those
+macros is the variable name used as a keyword parameter in the
+unserialize method to allow one to pass in a pre-initialized version
+of the object.
+
+    (unserialize :person-public :pp (make-person :age 42))
 
 Here is a simple session showing the above in action.  The following
 code first defines a function which serializes a value using a given
@@ -492,21 +586,14 @@ buffer using the key.
     CL-USER> (u-s :person-public *p*)
     #S(PERSON :NAME "Patrick" :AGE :UNKNOWN :COLOR "Green")
     
-The above examples make use of the factory form provided to
-the `make-slot-serializer` and `make-accessor-serializer` macros.
-One can forgo instantiating a new object and use an existing
-instance with the generated unserializers giving the instance
-with the `:object` keyword.
-
-    (unserialize :person-public :buffer buf :object *p*)
-    
 One can also define a serialize/unserialize pair for a list
 where each item uses the same serializer.  For example, one
 can do the following:
 
     (make-list-serializer :string-list :string)
     (serialize :string-list (list "a" "b" "c" "d") :buffer buffer)
-
+    
+The `make-list-serializer` can also take a `layer` keyword parameter.
 
 ### <a name="predefined-serializers">Pre-defined Serializers</a>
 
