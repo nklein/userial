@@ -601,8 +601,9 @@ The USerial library defines some commonly required serializers.
 
 For signed integers, the USerial library defines the following
 serializers (and unserializers): `:int8` for signed bytes, `:int16`
-for signed 16-bit integers, `:int32` for signed 32-bit integers, and
-`:int64` for signed 64-bit integers.
+for signed 16-bit integers, `:int32` for signed 32-bit integers,
+`:int64` for signed 64-bit integers, and `:int` for arbitrarily
+large integers.
 
 For unsigned integers, the USerial library defines the
 following serializers: `:uint8` for unsigned bytes, `:uint16`

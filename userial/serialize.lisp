@@ -202,6 +202,31 @@
 (make-int-serializer :int32 4)
 (make-int-serializer :int64 8)
 
+(define-serializer (:int value buffer)
+  (declare (type integer value)
+           (optimize (speed 3)))
+  (flet ((store-and-go (vv sign)
+           (multiple-value-bind (high low) (floor vv 64)
+             (cond
+               ((zerop high) (serialize :uint8 (+ low sign) :buffer buffer))
+               (t            (serialize :uint8 (+ low sign 64) :buffer buffer)
+                             (serialize :uint high :buffer buffer))))))
+    (cond
+      ((minusp value) (store-and-go (- value) 128))
+      (t              (store-and-go value 0)))))
+
+(define-unserializer (:int buffer)
+  (declare (optimize (speed 3)))
+  (flet ((get-number (vv)
+           (cond
+             ((<= 64 vv) (+ (* (unserialize :uint :buffer buffer) 64)
+                            (- vv 64)))
+             (t          vv))))
+    (let ((byte (unserialize :uint8 :buffer buffer)))
+      (cond
+        ((<= 128 byte) (- (get-number (- byte 128))))
+        (t             (get-number byte))))))
+
 ;;; floating-point type helper
 (defmacro make-float-serializer (key type bytes encoder decoder
                                  &key layer)
@@ -226,6 +251,17 @@
 		       ieee-floats:encode-float64
 		       ieee-floats:decode-float64)
 
+;;; byte arrays without size encoded with them
+(define-serializer (:raw-bytes value buffer
+                    :extra ((start 0) (end (length value))))
+  (declare (type (vector (unsigned-byte 8)) value))
+  (assert (<= 0 start end (1- (length value))))
+  (let ((length (- end start))
+        (buf-start (buffer-length :buffer buffer)))
+    (buffer-advance :amount length :buffer buffer)
+    (setf (subseq buffer buf-start (buffer-length :buffer buffer))
+          (subseq value start end))))
+  
 ;;; byte arrays with size
 (define-serializer (:bytes value buffer)
   (declare (type (vector (unsigned-byte 8)) value))
