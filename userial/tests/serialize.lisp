@@ -150,17 +150,17 @@
   initial
   age)
 
-(make-slot-serializer :person-private
-		      (make-person :name "(Unknown)"
-				   :initial "(Unknown)"
-				   :age "(Unknown)")
-		      (:string name :alphas initial :uint8 age))
+(make-slot-serializer (:person-private person buffer
+                                       (make-person :name "(Unknown)"
+                                                    :initial "(Unknown)"
+                                                    :age "(Unknown)"))
+  :string name :alphas initial :uint8 age)
 
-(make-accessor-serializer :person-public
-			  (make-person :name "(Unknown)"
-				       :initial "(Unknown)"
-				       :age "(Unknown)")
-			  (:string person-name :alphas person-initial))
+(make-accessor-serializer (:person-public person buffer
+                                          (make-person :name "(Unknown)"
+                                                       :initial "(Unknown)"
+                                                       :age "(Unknown)"))
+  :string person-name :alphas person-initial)
 
 (nst:def-fixtures sample-people
   (:documentation "Prepare some sample people")

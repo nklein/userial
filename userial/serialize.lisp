@@ -3,10 +3,9 @@
 
 (in-package :userial)
 
-(declaim (optimize (speed 3)))
-
 ;;; serialize generic function
-(defgeneric serialize (type value &key buffer &allow-other-keys)
+(contextl:define-layered-function serialize
+    (type value &key buffer &allow-other-keys)
   (:documentation "Method used to serialize a VALUE of given TYPE into BUFFER")
   (:method (type value &key buffer &allow-other-keys)
     "There is no default way to serialize something, so chuck an error."
@@ -14,7 +13,8 @@
     (error "SERIALIZE not supported for type ~A" type)))
 
 ;;; unserialize generic function
-(defgeneric unserialize (type &key buffer &allow-other-keys)
+(contextl:define-layered-function unserialize
+    (type &key buffer &allow-other-keys)
   (:documentation
      "Method used to unserialize a value of given TYPE from BUFFER")
   (:method (type &key buffer &allow-other-keys)
@@ -22,112 +22,129 @@
     (declare (ignore buffer))
     (error "UNSERIALIZE not supported for type ~A" type)))
 
-(defmacro serialize* ((type value &rest rest) &key (buffer '*buffer*))
+(defmacro serialize* ((&rest type-value-pairs) &key (buffer '*buffer*))
   "SERIALIZE a list of TYPE + VALUE into BUFFER returning the final BUFFER.  For example:  (SERIALIZE* (:UINT8 5 :INT16 -10) :BUFFER BUFFER)"
-  (if rest
-      (let ((new-buffer (gensym "BUF-")))
-	`(let ((,new-buffer (serialize ,type ,value :buffer ,buffer)))
-	   (serialize* ,rest :buffer ,new-buffer)))
-      `(serialize ,type ,value :buffer ,buffer)))
+  (multiple-value-bind (vars types values)
+      (get-syms-types-places type-value-pairs)
+    (declare (ignore vars))
+    (let ((buf (gensym "BUF-")))
+      `(let* ((,buf ,buffer)
+              ,@(mapcar #'(lambda (tt vv)
+                            `(,buf
+                               (serialize ,tt ,vv :buffer ,buf)))
+                        types values))
+         ,buf))))
 
 (defmacro serialize-slots* ((&rest type-slot-plist) object
 			    &key (buffer '*buffer*))
-  (let ((slots (loop :for ss :in (rest type-slot-plist) :by #'cddr
-		     :collecting ss)))
-    `(with-slots ,slots ,object
-       (serialize* ,type-slot-plist :buffer ,buffer))))
+  (multiple-value-bind (vars types slots)
+      (get-syms-types-places type-slot-plist)
+    `(with-slots ,(mapcar #'quote-2 vars slots) ,object
+         (serialize* ,(apply #'append (mapcar #'quote-2 types vars))
+                     :buffer ,buffer))))
 
 (defmacro serialize-accessors* ((&rest type-accessor-plist) object
 				&key (buffer '*buffer*))
   (multiple-value-bind (vars types accessors)
-      (loop :for ta :on type-accessor-plist :by #'cddr
-	    :collecting (gensym "SYMS-") :into vars
-	    :collecting (first ta) :into types
-	    :collecting (second ta) :into accessors
-	    :finally (return (values vars types accessors)))
-    (flet ((mappend (fn aas bbs)
-	     (reduce #'nconc (mapcar fn aas bbs))))
-      `(with-accessors ,(mapcar #'(lambda (vv aa) (list vv aa)) vars accessors)
-	   ,object
-	 (serialize* ,(mappend #'(lambda (tt vv) (list tt vv)) types vars)
-		     :buffer ,buffer)))))
+      (get-syms-types-places type-accessor-plist)
+    `(with-accessors ,(mapcar #'quote-2 vars accessors) ,object
+         (serialize* ,(apply #'append (mapcar #'quote-2 types vars))
+                     :buffer ,buffer))))
 
-(defmacro unserialize* ((type place &rest rest) &key (buffer '*buffer*))
+(defmacro unserialize* ((&rest type-place-plist) &key (buffer '*buffer*))
   "UNSERIALIZE a list of TYPE + PLACE from the given BUFFER and execute the body.  For example:  (LET (AA BB) (UNSERIALIZE* (:UINT8 AA :INT16 BB) :BUFFER BUFFER (LIST AA BB)))"
-  (let ((pp (gensym "PLACE-"))
-	(pk (gensym "BUF-")))
-    `(multiple-value-bind (,pp ,pk)
-	 (unserialize ,type :buffer ,buffer)
-       (values (setf ,place ,pp) ,pk)
-       ,@(when rest
-	    `((unserialize* ,rest :buffer ,pk))))))
+  (multiple-value-bind (vars types places)
+      (get-syms-types-places type-place-plist)
+    (declare (ignore vars))
+    (let ((buf (gensym "BUF-")))
+      `(let* ((,buf ,buffer))
+         (setf ,@(apply #'append
+                        (mapcar #'(lambda (tt pp)
+                                    `(,pp (unserialize ,tt :buffer ,buf)))
+                                types places)))
+         (values t ,buf)))))
 
 (defmacro unserialize-slots* ((&rest type-slot-plist) object
 			      &key (buffer '*buffer*))
-  (let ((slots (loop :for ss :in (rest type-slot-plist) :by #'cddr
-		     :collecting ss))
-	(obj-sym (gensym "OBJECT-"))
-	(buf-sym (gensym "BUFFER-")))
-    `(let ((,obj-sym ,object)
-	   (,buf-sym ,buffer))
-       (with-slots ,slots ,obj-sym
-	 (unserialize* ,type-slot-plist :buffer ,buf-sym))
-       (values ,obj-sym ,buf-sym))))
+  (multiple-value-bind (vars types slots)
+      (get-syms-types-places type-slot-plist)
+    (let ((obj (gensym "OBJ-")))
+      `(let ((,obj ,object))
+         (with-slots ,(mapcar #'quote-2 vars slots) ,obj
+           (unserialize* ,(apply #'append (mapcar #'quote-2 types vars))
+                         :buffer ,buffer)
+           ,obj)))))
 
 (defmacro unserialize-accessors* ((&rest type-accessor-plist) object
 				  &key (buffer '*buffer*))
   (multiple-value-bind (vars types accessors)
-      (loop :for ta :on type-accessor-plist :by #'cddr
-	    :collecting (gensym "SYMS-") :into vars
-	    :collecting (first ta) :into types
-	    :collecting (second ta) :into accessors
-	    :finally (return (values vars types accessors)))
-    (flet ((mappend (fn aas bbs)
-	     (reduce #'nconc (mapcar fn aas bbs))))
-      (let ((obj-sym (gensym "OBJECT-"))
-	    (buf-sym (gensym "BUFFER-")))
-      `(let ((,obj-sym ,object)
-	     (,buf-sym ,buffer))
-	 (with-accessors ,(mapcar #'(lambda (vv aa) (list vv aa))
-				  vars accessors)
-	     ,obj-sym
-	   (unserialize* ,(mappend #'(lambda (tt vv) (list tt vv)) types vars)
-			 :buffer ,buf-sym))
-	 (values ,obj-sym ,buf-sym))))))
+      (get-syms-types-places type-accessor-plist)
+    (let ((obj (gensym "OBJ-")))
+      `(let ((,obj ,object))
+         (with-accessors ,(mapcar #'quote-2 vars accessors) ,obj
+           (unserialize* ,(apply #'append (mapcar #'quote-2 types vars))
+                         :buffer ,buffer)
+           ,obj)))))
 
-(defmacro unserialize-let* ((type var &rest rest) buffer &body body)
+(defmacro unserialize-let* ((&rest type-var-plist) buffer &body body)
   "UNSERIALIZE a list of TYPE + VARIABLE-NAME from the given BUFFER and execute the body.  For example:  (UNSERIALIZE-LET* (:UINT8 AA :INT16 BB) :buffer BUFFER (LIST AA BB))"
   (let ((buf (gensym "BUF-")))
-    `(multiple-value-bind (,var ,buf)
-	 (unserialize ,type :buffer ,buffer)
-       ,(if rest
-	    `(unserialize-let* ,rest ,buf ,@body)
-	    `(values (progn ,@body) ,buf)))))
+    (multiple-value-bind (vars types places)
+        (get-syms-types-places type-var-plist)
+      (declare (ignore vars))
+      `(let* ((,buf ,buffer)
+              ,@(mapcar #'(lambda (pp tt)
+                            `(,pp (unserialize ,tt :buffer ,buf)))
+                        places types))
+         (values (progn
+                   ,@body)
+                 ,buf)))))
 
 (defun unserialize-list* (types &key (buffer *buffer*))
-  "UNSERIALIZE a list of types from the given BUFFER into a list.  For example:  (MAPCAR #'PRINC (UNSERIALIZE-LIST* '(:UINT8 :INT16) BUFFER))"
-  (labels ((recurse (types buffer list)
-	     (cond
-	       ((null types) (values (nreverse list) buffer))
-	       (t (multiple-value-bind (value buffer)
-		      (unserialize (first types) :buffer buffer)
-		    (recurse (rest types) buffer (cons value list)))))))
-    (recurse types buffer nil)))
+  "UNSERIALIZE a list of types from the given BUFFER into a list.  For example:  (MAPCAR #'PRINC (UNSERIALIZE-LIST* '(:UINT8 :INT16) :BUFFER  BUFFER))"
+  (values (mapcar #'(lambda (tt)
+                      (unserialize tt :buffer buffer))
+                  types)
+          buffer))
+
+;; help define a serializer
+(defmacro define-serializer ((key value buffer &key layer extra)
+                             &body body)
+  (let ((keysym (gensym "KEY-")))
+    `(contextl:define-layered-method serialize ,@(when layer
+                                                       `(:in-layer ,layer))
+           ((,keysym (eql ,key)) ,value
+            &key (,buffer userial::*buffer*) ,@extra &allow-other-keys)
+        (declare (ignore ,keysym))
+        ,@body
+        ,buffer)))
+
+;; help define an unserializer
+(defmacro define-unserializer ((key buffer &key layer extra)
+                               &body body)
+  (multiple-value-bind (decls body)
+      (userial::separate-docstring-and-decls body)
+    (let ((keysym (gensym "KEY-")))
+      `(contextl:define-layered-method unserialize ,@(when layer
+                                                           `(:in-layer ,layer))
+            ((,keysym (eql ,key))
+             &key (,buffer userial::*buffer*) ,@extra &allow-other-keys)
+        ,@decls
+        (declare (ignore ,keysym))
+        (values (progn ,@body) ,buffer)))))
 
 ;;; help build integer serialize/unserialize methods
-(defmacro make-uint-serializer (key bytes)
+(defmacro make-uint-serializer (key bytes &key layer)
   "Make SERIALIZE/UNSERIALIZE methods for an unsigned-int of BYTES bytes
    in length dispatched by KEY."
   `(progn
-     (defmethod serialize ((type (eql ,key)) value &key (buffer *buffer*))
-       (declare (type buffer buffer)
-		(ignore type)
-		(type (unsigned-byte ,(* bytes 8)) value))
+     (define-serializer (,key value buffer :layer ,layer)
+       (declare (type (unsigned-byte ,(* bytes 8)) value)
+                (optimize (speed 3)))
        (unroll-add-bytes buffer value ,bytes))
-     (defmethod unserialize ((type (eql ,key)) &key (buffer *buffer*))
-       (declare (type buffer buffer)
-		(ignore type))
-       (values (unroll-get-bytes buffer ,bytes) buffer))))
+     (define-unserializer (,key buffer :layer ,layer)
+       (declare (optimize (speed 3)))
+       (unroll-get-bytes buffer ,bytes))))
 
 ;;; define standard unsigned-int serialize/deserialize methods
 (make-uint-serializer :uint8  1)
@@ -137,24 +154,20 @@
 (make-uint-serializer :uint48 6)
 (make-uint-serializer :uint64 8)
 
-(defmacro make-int-serializer (key bytes)
+(defmacro make-int-serializer (key bytes &key layer)
   "Make SERIALIZE/UNSERIALIZE methods for a signed-int of BYTES bytes in length dispatched by KEY."
-  `(progn
-     (defmethod serialize ((type (eql ,key)) value &key (buffer *buffer*))
-       (declare (type buffer buffer)
-		(ignore type)
-		(type (signed-byte ,(* bytes 8)) value))
-       (let ((vv (+ value ,(expt 2 (- (* bytes 8) 1)))))
-	 (declare (type (unsigned-byte ,(* bytes 8)) vv))
-	 (unroll-add-bytes buffer vv ,bytes)))
-     (defmethod unserialize ((type (eql ,key)) &key (buffer *buffer*))
-       (declare (type buffer buffer)
-		(ignore type))
-       (let ((value (unroll-get-bytes buffer ,bytes)))
-	 (declare (type (unsigned-byte ,(* bytes 8)) value))
-	 (let ((vv (- value ,(expt 2 (- (* bytes 8) 1)))))
-	   (declare (type (signed-byte ,(* bytes 8)) vv))
-	   (values vv buffer))))))
+  (let ((vv (gensym "VV-")))
+    `(progn
+       (define-serializer (,key value buffer :layer ,layer)
+         (declare (type (signed-byte ,(* bytes 8)) value)
+                  (optimize (speed 3)))
+         (let ((,vv (+ value ,(expt 2 (1- (* bytes 8))))))
+           (unroll-add-bytes buffer ,vv ,bytes)))
+       (define-unserializer (,key buffer :layer ,layer)
+         (declare (optimize (speed 3)))
+         (let ((,vv (unroll-get-bytes buffer ,bytes)))
+           (declare (type (unsigned-byte ,(* bytes 8)) ,vv))
+           (- ,vv ,(expt 2 (1- (* bytes 8)))))))))
 
 ;;; define standard signed-int serialize/deserialize methods
 (make-int-serializer :int8  1)
@@ -163,20 +176,20 @@
 (make-int-serializer :int64 8)
 
 ;;; floating-point type helper
-(defmacro make-float-serializer (key type bytes encoder decoder)
+(defmacro make-float-serializer (key type bytes encoder decoder
+                                 &key layer)
   "Make serialize/unserialize routines for floating-point type TYPE dispatched by KEY with the given number of BYTES and an ENCODER/DECODER pair."
-  `(progn
-     (defmethod serialize ((type (eql ,key)) value &key (buffer *buffer*))
-       (declare (type buffer buffer)
-		(ignore type)
-		(type ,type value))
-       (unroll-add-bytes buffer (,encoder value) ,bytes))
-     (defmethod unserialize ((type (eql ,key)) &key (buffer *buffer*))
-       (declare (type buffer buffer)
-		(ignore type))
-       (let ((vv (unroll-get-bytes buffer ,bytes)))
-	 (declare (type (unsigned-byte ,(* bytes 8)) vv))
-	 (values (,decoder vv) buffer)))))
+  (let ((vv (gensym "VV-")))
+    `(progn
+       (define-serializer (,key value buffer :layer ,layer)
+         (declare (type ,type value)
+                  (optimize (speed 3)))
+         (unroll-add-bytes buffer (,encoder value) ,bytes))
+       (define-unserializer (,key buffer :layer ,layer)
+         (declare (optimize (speed 3)))
+         (let ((,vv (unroll-get-bytes buffer ,bytes)))
+           (declare (type (unsigned-byte ,(* bytes 8)) ,vv))
+           (,decoder ,vv))))))
 
 ;;; floating-point type serializers/deserializers
 (make-float-serializer :float32 single-float 4
@@ -187,11 +200,8 @@
 		       ieee-floats:decode-float64)
 
 ;;; byte arrays with size
-(defmethod serialize ((type (eql :bytes)) value &key (buffer *buffer*))
-  "Serialize the raw bytes in the VALUE array into BUFFER"
-  (declare (type buffer buffer)
-	   (ignore type)
-	   (type (vector (unsigned-byte 8)) value))
+(define-serializer (:bytes value buffer)
+  (declare (type (vector (unsigned-byte 8)) value))
   (labels ((add-bytes (value start end buffer)
 	     (let* ((length    (- end start))
 		    (buf-start (buffer-length :buffer buffer)))
@@ -209,10 +219,7 @@
     (buffer-add-byte 237 :buffer buffer)
     (buffer-add-byte   0 :buffer buffer)))
 
-(defmethod unserialize ((type (eql :bytes)) &key (buffer *buffer*))
-  "Unserialize a raw array of bytes from a BUFFER"
-  (declare (type buffer buffer)
-	   (ignore type))
+(define-unserializer (:bytes buffer)
   (labels ((add-segment (buffer start end output)
 	     (let* ((length (- end start))
 		    (out-start (buffer-length :buffer output)))
@@ -235,64 +242,52 @@
       (values output buffer))))
 
 ;;; string handling
-(defmethod serialize ((type (eql :string)) value &key (buffer *buffer*))
-  "Serialize a string from VALUE into the BUFFER"
-  (declare (type buffer buffer)
-	   (ignore type)
-	   (type string value))
+(define-serializer (:string value buffer)
+  (declare (type string value))
   (serialize :bytes (trivial-utf-8:string-to-utf-8-bytes value)
 	     :buffer buffer))
 
-(defmethod unserialize ((type (eql :string)) &key (buffer *buffer*))
-  "Unserialize a string from a BUFFER"
-  (declare (type buffer buffer)
-	   (ignore type))
-  (multiple-value-bind (value buffer)
-      (unserialize :bytes :buffer buffer)
+(define-unserializer (:string buffer)
+  (let ((value (unserialize :bytes :buffer buffer)))
     (declare (type (vector (unsigned-byte 8)) value)
 	     (type buffer buffer))
-    (values (trivial-utf-8:utf-8-bytes-to-string value) buffer)))
+    (trivial-utf-8:utf-8-bytes-to-string value)))
 
 ;;; enum helper
-(defmacro make-enum-serializer (type (&rest choices))
+(defmacro make-enum-serializer (type (&rest choices)
+                                &key layer
+                                     (minimum-bytes 0))
   "Create serialize/unserialize methods keyed by TYPE where the possible values are given by CHOICES"
-  (let ((bytes (nth-value 0 (ceiling (log (length choices) 256)))))
+  (let ((bytes (max (nth-value 0 (ceiling (log (length choices) 256)))
+                    minimum-bytes)))
     `(progn
-       (defmethod serialize ((type (eql ,type)) value
-			     &key (buffer *buffer*))
-	 (declare (type buffer buffer)
-		  (ignore type)
-		  (type symbol value))
+       (define-serializer (,type value buffer :layer ,layer)
+         (declare (type symbol value))
 	 (let ((value (ecase value
 			,@(loop :for ii :from 0
 			        :for vv :in choices
 			        :collecting (list (if vv vv '(nil)) ii)))))
 	   (declare (type (unsigned-byte ,(* bytes 8)) value))
 	   (unroll-add-bytes buffer value ,bytes)))
-     (defmethod unserialize ((type (eql ,type)) &key (buffer *buffer*))
-       (declare (type buffer buffer)
-		(ignore type))
-       (let ((value (unroll-get-bytes buffer ,bytes)))
-	 (declare (type (unsigned-byte ,(* bytes 8)) value))
+       (define-unserializer (,type buffer :layer ,layer)
+         (let ((value (unroll-get-bytes buffer ,bytes)))
+           (declare (type (unsigned-byte ,(* bytes 8)) value))
 	   (let ((value (ecase value
 			  ,@(loop :for ii :from 0
-			          :for vv :in choices
-			          :collecting (list ii vv)))))
+                                  :for vv :in choices
+                                  :collecting (list ii vv)))))
 	     (declare (type symbol value))
-	     (values value buffer)))))))
+             value))))))
 
 ;;; define standard enum methods
 (make-enum-serializer :boolean (nil t))
 
-(defmacro make-bitfield-serializer (type (&rest choices))
+(defmacro make-bitfield-serializer (type (&rest choices) &key layer)
   "Create serialize/unserialize methods keyed by TYPE where the CHOICES can either be specified singly or as a list."
   (let ((bytes (nth-value 0 (ceiling (length choices) 8))))
     `(progn
-       (defmethod serialize ((type (eql ,type)) (value cons)
-			     &key (buffer *buffer*))
-	 (declare (type buffer buffer)
-		  (ignore type)
-		  (type cons value))
+       (define-serializer (,type (value cons) buffer :layer ,layer)
+         (declare (type cons value))
 	 (let ((val (reduce #'(lambda (acc &optional sym)
 				  (logior acc
 					  (ecase sym
@@ -304,11 +299,8 @@
 			      :initial-value 0)))
 	   (declare (type (unsigned-byte ,(* bytes 8)) val))
 	   (unroll-add-bytes buffer val ,bytes)))
-       (defmethod serialize ((type (eql ,type)) (value symbol)
-			     &key (buffer *buffer*))
-	 (declare (type buffer buffer)
-		  (ignore type)
-		  (type symbol value))
+       (define-serializer (,type (value symbol) buffer :layer ,layer)
+         (declare (type symbol value))
 	 (let ((val (ecase value
 		      ((nil) 0)
 		      ,@(loop :for ii :from 0
@@ -316,122 +308,69 @@
 			      :collecting (list vv (expt 2 ii))))))
 	   (declare (type (unsigned-byte ,(* bytes 8)) val))
 	   (unroll-add-bytes buffer val ,bytes)))
-     (defmethod unserialize ((type (eql ,type)) &key (buffer *buffer*))
-       (declare (type buffer buffer)
-		(ignore type))
-       (let ((value (unroll-get-bytes buffer ,bytes)))
-	 (declare (type (unsigned-byte ,(* bytes 8)) value))
-	 (assert (< value ,(expt 2 (length choices))))
-	 (values (loop :for ii :from 0 :below ,(length choices)
-		       :when (plusp (logand value (expt 2 ii)))
-		          :collect (svref (vector ,@choices) ii))
-		 buffer))))))
+       (define-unserializer (,type buffer :layer ,layer)
+         (let ((value (unroll-get-bytes buffer ,bytes)))
+           (declare (type (unsigned-byte ,(* bytes 8)) value))
+           (assert (< value ,(expt 2 (length choices))))
+           (loop :for ii :from 0 :below ,(length choices)
+                 :when (plusp (logand value (expt 2 ii)))
+                 :collect (svref (vector ,@choices) ii)))))))
 
-(defmacro make-simple-serializer (type (var factory) (&rest pairs))
+(defmacro make-simple-serializer ((type value buffer factory &key layer extra)
+                                   &rest pairs)
   `(progn
-     (defmethod userial:serialize ((type (eql ,type)) value
-                           &key (buffer *buffer*)
-                           &allow-other-keys)
-       (let ((,var value))
-         (userial:serialize* ,pairs :buffer buffer)))
-     (defmethod userial:unserialize ((type (eql ,type))
-                             &key (buffer *buffer*)
-                                  (object ,factory)
-                             &allow-other-keys)
-       (let ((,var object))
-         (userial:unserialize* ,pairs :buffer buffer)
-         (values ,var buffer)))))
+     (define-serializer (,type ,value ,buffer :layer ,layer :extra extra)
+       (serialize* ,pairs :buffer ,buffer))
+     (define-unserializer (,type ,buffer
+                                 :layer ,layer
+                                 :extra ((,value ,factory) ,@extra))
+       (unserialize* ,pairs :buffer ,buffer))))
 
-(defmacro make-slot-serializer (type factory (&rest fields))
+(defmacro make-slot-serializer ((type value buffer factory &key layer extra)
+                                &rest fields)
   "Make a serialize/unserialize pair with given TYPE using the FACTORY
    form when a new instance is needed where FIELDS is a list of
    key/slot values.  For example:
       (defstruct person name (age 0))
-      (make-slot-serializer :person (make-person) (:string name :uint8 age))"
-  (labels ((get-types-and-slots (fields &optional types slots)
-	     (cond
-	       ((null fields) (values (nreverse types) (nreverse slots)))
-	       ((null (rest fields))
-		  (error "Expected same number of TYPEs as SLOTs"))
-	       (t (get-types-and-slots (rest (rest fields))
-				       (cons (first fields) types)
-				       (cons (second fields) slots))))))
-    (multiple-value-bind (types slots) (get-types-and-slots fields)
-      `(progn
-	 (defmethod serialize ((type (eql ,type)) value
-			       &key (buffer *buffer*))
-	   (with-slots ,slots value
-	     ,@(mapcar #'(lambda (type slot)
-			   `(serialize ,type ,slot :buffer buffer))
-		       types slots))
-	   buffer)
-	 (defmethod unserialize ((type (eql ,type))
-				 &key (buffer *buffer*)
-				 (object ,factory))
-	   (with-slots ,slots object
-	     ,@(mapcar #'(lambda (type slot)
-			   `(setf ,slot (unserialize ,type
-						     :buffer buffer)))
-		       types slots))
-	   (values object buffer))))))
+      (make-slot-serializer (:person person buffer (make-person))
+          :string name :uint8 age)"
+  `(progn
+     (define-serializer (,type ,value ,buffer :layer ,layer :extra ,extra)
+       (serialize-slots* ,fields ,value :buffer ,buffer))
+     (define-unserializer (,type ,buffer
+                                 :layer ,layer
+                                 :extra ((,value ,factory) ,@extra))
+       (unserialize-slots* ,fields ,value :buffer ,buffer)
+       ,value)))
 
-(defmacro make-accessor-serializer (type factory (&rest fields))
+(defmacro make-accessor-serializer ((type value buffer factory
+                                     &key layer extra)
+                                    &rest fields)
   "Make a serialize/unserialize pair with given TYPE using the FACTORY
    form when a new instance is needed where FIELDS is a list of
    key/accessor values.  For example:
       (defstruct person name (age 0))
-      (make-slot-serializer :person (make-person)
-                                    (:string person-name :uint8 person-age))"
-  (labels ((get-types-and-accessors (fields &optional types slots syms)
-	     (cond
-	       ((null fields) (values (nreverse types)
-				      (nreverse slots)
-				      (nreverse syms)))
-	       ((null (rest fields))
-		  (error "Expected same number of TYPEs as SLOTs"))
-	       (t (get-types-and-accessors (rest (rest fields))
-					   (cons (first fields) types)
-					   (cons (second fields) slots)
-					   (cons (gensym "ACC-") syms))))))
-    (multiple-value-bind (types accessors syms)
-	(get-types-and-accessors fields)
-      `(progn
-	 (defmethod serialize ((type (eql ,type)) value
-			       &key (buffer *buffer*))
-	   (with-accessors ,(mapcar #'(lambda (sym accessor)
-					`(,sym ,accessor))
-				    syms accessors)
-	       value
-	     ,@(mapcar #'(lambda (type sym)
-			   `(serialize ,type ,sym :buffer buffer))
-		       types syms))
-	   buffer)
-	 (defmethod unserialize ((type (eql ,type))
-				 &key (buffer *buffer*)
-				      (object ,factory))
-	   (with-accessors ,(mapcar #'(lambda (sym accessor)
-					`(,sym ,accessor))
-				    syms accessors) object
-	     ,@(mapcar #'(lambda (type sym)
-			   `(setf ,sym (unserialize ,type :buffer buffer)))
-		       types syms))
-	   (values object buffer))))))
-
-(defmacro make-list-serializer (type element-type)
-  "Make a serialize/unserialize pair for the key TYPE where each element is serialized with the key ELEMENT-TYPE."
+      (make-accessor-serializer (:person person buffer (make-person))
+          :string person-name :uint8 person-age)"
   `(progn
-     (defmethod userial:serialize ((type (eql ,type)) value
-                                   &key (buffer *buffer*))
+     (define-serializer (,type ,value ,buffer :layer ,layer :extra ,extra)
+       (serialize-accessors* ,fields ,value :buffer ,buffer))
+     (define-unserializer (,type ,buffer
+                                 :layer ,layer
+                                 :extra ((,value ,factory) ,@extra))
+       (unserialize-accessors* ,fields ,value :buffer ,buffer)
+       ,value)))
+
+(defmacro make-list-serializer (type element-type &key layer)
+  "Make a serialize/unserialize pair for the key TYPE where each element is serialized with the key ELEMENT-TYPE."
+  (format t "Foo~%")
+  `(progn
+     (define-serializer (,type value buffer :layer ,layer)
        (declare (type list value))
-       (let ((len (length value)))
-         (userial:serialize :uint32 len :buffer buffer)
-         (dolist (ee value)
-           (userial:serialize ,element-type ee :buffer buffer)))
-       buffer)
-     (defmethod userial:unserialize ((type (eql ,type))
-                                     &key (buffer *buffer*))
-       (userial:unserialize-let* (:uint32 len) buffer
-         (values (loop :for ii :from 1 :to len
-                    :collecting (userial:unserialize ,element-type
-                                                     :buffer buffer))
-                 buffer)))))
+       (serialize :uint32 (length value) :buffer buffer)
+       (dolist (ee value)
+         (serialize ,element-type ee :buffer buffer)))
+     (define-unserializer (,type buffer :layer ,layer)
+       (unserialize-let* (:uint32 len) buffer
+         (loop :for ii :from 1 :to len
+               :collecting (unserialize ,element-type :buffer buffer))))))

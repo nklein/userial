@@ -7,11 +7,12 @@
   :version "0.6.2011.05.12"
   :author "Patrick Stein <pat@nklein.com>"
   :licence "MIT"
-  :depends-on ("ieee-floats" "trivial-utf-8")
+  :depends-on ("ieee-floats" "trivial-utf-8" "contextl")
   :components ((:module "userial"
                 :serial t
 		:components ((:file "package")
 			     (:file "buffer")
+                             (:file "util")
 			     (:file "serialize")
 			     (:file "peek")))
 	       (:static-file "README.mkdn")

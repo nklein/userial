@@ -13,6 +13,8 @@
 	   :buffer-add-byte
 	   :buffer-get-byte
 	   :buffer-rewind
+           :define-serializer
+           :define-unserializer
 	   :make-uint-serializer
 	   :make-int-serializer
 	   :make-enum-serializer
