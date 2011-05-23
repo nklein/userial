@@ -608,7 +608,9 @@ For unsigned integers, the USerial library defines the
 following serializers: `:uint8` for unsigned bytes, `:uint16`
 for unsigned 16-bit integers, `:uint24` for unsigned 24-bit integers,
 `:uint32` for unsigned 32-bit integers, `:uint48` for unsigned
-48-bit integers, and `:uint64` for unsigned 64-bit integers.
+48-bit integers, `:uint64` for unsigned 64-bit integers, and
+`:uint` for arbitrarily large unsigned integers.
+
 
 For floating point numbers, the USerial library defines the `:float32`
 serializer for encoding `single-float` values as 32-bit IEEE floating

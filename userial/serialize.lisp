@@ -154,6 +154,33 @@
 (make-uint-serializer :uint48 6)
 (make-uint-serializer :uint64 8)
 
+;;; progressively stored unsigned integers
+(define-serializer (:uint value buffer)
+  (declare (type (integer 0 *) value)
+           (optimize (speed 3)))
+  (labels ((store-bytes (vv)
+             (declare (type (integer 0 *) vv))
+             (multiple-value-bind (high low) (floor vv 128)
+               (declare (type (integer 0 *) high)
+                        (type (integer 0 127) low))
+               (cond
+                 ((zerop high) (serialize :uint8 low :buffer buffer))
+                 (t            (serialize :uint8 (+ low 128) :buffer buffer)
+                               (store-bytes high))))))
+    (store-bytes value)))
+(define-unserializer (:uint buffer)
+  (declare (optimize (speed 3)))
+  (labels ((fetch-bytes (&optional (vv 0) (offset 1))
+             (declare (type (integer 0 *) vv)
+                      (type (integer 1 *) offset))
+             (unserialize-let* (:uint8 byte) buffer
+               (flet ((add (bb)
+                        (+ vv (* bb offset))))
+                 (cond
+                   ((< byte 128) (add byte))
+                   (t (fetch-bytes (add (- byte 128)) (* offset 128))))))))
+    (fetch-bytes)))
+
 (defmacro make-int-serializer (key bytes &key layer)
   "Make SERIALIZE/UNSERIALIZE methods for a signed-int of BYTES bytes in length dispatched by KEY."
   (let ((vv (gensym "VV-")))
