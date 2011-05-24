@@ -4,7 +4,7 @@
 (defpackage :userial
   (:use :cl)
   (:export :buffer
-           :*buffer*
+           :get-buffer
            :make-buffer
 	   :with-buffer
 	   :buffer-length

@@ -4,6 +4,7 @@
 (in-package :userial)
 
 (defun get-syms-types-places (type-place-list &optional vars types places)
+  "Take a list like (:UINT AA :STRING BB :COW CC) and return three lists, the third the list (AA BB CC), the second the list (:UINT :STRING :COW), and the first a list of #'GENSYM symbols as long as the other lists are."
   (cond
     ((null type-place-list)
         (values (nreverse vars)
@@ -17,9 +18,11 @@
                                (cons (second type-place-list) places)))))
 
 (defun quote-2 (aa bb)
+  "Take two parameters and return them as a quoted list."
   `(,aa ,bb))
 
 (defun separate-docstring-and-decls (body &optional docstring decls)
+  "Take a body form and return two values.  The first value is a list of the docstring and any introductory DECLARE forms in the body and the second value is the rest of the body."
   (let ((first (first body)))
     (cond
       ((and (null decls)
