@@ -844,7 +844,7 @@ be sent to the client.
                   
     (defun make-shot-results-message (hit)
       (with-buffer (make-buffer)
-        (serialize* (:server-opcodes :shot-results
-                     :shot-result    (if hit :hit :miss)))))
+        (serialize* :server-opcodes :shot-results
+                    :shot-result    (if hit :hit :miss))))
                          
   [bship]: http://en.wikipedia.org/wiki/Battleship_(game)
