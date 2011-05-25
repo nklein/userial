@@ -1,7 +1,7 @@
 ;; Copyright (c) 2011 nklein software
 ;; MIT License. See included LICENSE.txt file for licensing details.
 
-# USerial v0.6.2011.05.12
+# USerial v0.7.2011.05.24
 
 Patrick Stein <pat@nklein.com>
 
@@ -690,7 +690,7 @@ something like this:
           (:place-ship (handle-place-ship-message message))
           (:ping       (handle-ping-message message))
           (:fire       (handle-ping-message message)))))
-                           
+
 ### <a name="login">Logging In</a>
 
 To begin a game, the client sends a message to the server with

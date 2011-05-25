@@ -55,10 +55,13 @@
 
 ;;; define a criterion that makes sure the test-form is an array of
 ;;; unsigned bytes that are equal to the given list of bytes
+(defun make-ubyte-array (bytes)
+  (make-array (list (length bytes))
+              :element-type '(unsigned-byte 8)
+              :initial-contents bytes))
+
 (nst:def-criterion-alias (:array-equalp bytes)
-    `(:equalp ,(make-array (list (length bytes))
-			   :element-type '(unsigned-byte 8)
-			   :initial-contents bytes)))
+    `(:equalp ,(make-ubyte-array bytes)))
 
 ;;; prepare an enum and bitfield type for testing
 (make-enum-serializer     :alphas (:a :b :c :d :e :f :g :h :i :j :k :l :m
@@ -258,3 +261,37 @@
     (with-buffer ubuffer
       (buffer-rewind)
       (nth-value 0 (unserialize-list* '(:int16 :string :uint8 :uint16))))))
+
+;;; testing versioned serializers
+(contextl:deflayer v1)
+(contextl:deflayer v0.1)
+(contextl:deflayer v1.1 (v1))
+(contextl:deflayer v2.0 (v1))
+(make-enum-serializer :difficulty (:low :high))
+(make-enum-serializer :difficulty (:low :medium :high) :layer v1.1)
+(make-enum-serializer :difficulty (:easy :hard) :layer v2.0)
+
+(nst:def-test-group test-layered-versions (unserialize-buffers)
+  (nst:def-test test-serializing-versions (:array-equalp (0 1 0 1 2 0 1))
+    (with-buffer (make-buffer 7)
+      (contextl:with-active-layers ()
+        (serialize* :difficulty :low :difficulty :high))
+      (contextl:with-active-layers (v1.1)
+        (serialize* :difficulty :low :difficulty :medium :difficulty :high))
+      (contextl:with-active-layers (v2.0)
+        (serialize* :difficulty :easy :difficulty :hard))))
+  (nst:def-test test-unserializing-versions (:equalp '(:low :high
+                                                       :low :medium :high
+                                                       :easy :hard))
+    (with-buffer (make-buffer 7)
+      (serialize :raw-bytes (make-ubyte-array '(0 1 0 1 2 0 1)))
+      (buffer-rewind)
+      (apply #'append
+             (list (contextl:with-active-layers ()
+                     (unserialize-list* '(:difficulty :difficulty)))
+                   (contextl:with-active-layers (v1.1)
+                     (unserialize-list* '(:difficulty
+                                          :difficulty
+                                          :difficulty)))
+                   (contextl:with-active-layers (v2.0)
+                     (unserialize-list* '(:difficulty :difficulty))))))))
