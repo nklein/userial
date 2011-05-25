@@ -15,15 +15,17 @@
 	   :buffer-rewind
            :define-serializer
            :define-unserializer
-	   :make-uint-serializer
-	   :make-int-serializer
-	   :make-enum-serializer
+	   :make-accessor-serializer
+           :make-alias-serializer
 	   :make-bitfield-serializer
+	   :make-enum-serializer
 	   :make-float-serializer
+	   :make-int-serializer
+           :make-list-serializer
            :make-simple-serializer
 	   :make-slot-serializer
-	   :make-accessor-serializer
-           :make-list-serializer
+	   :make-uint-serializer
+           :make-vector-serializer
 	   :serialize
 	   :serialize*
 	   :serialize-slots*

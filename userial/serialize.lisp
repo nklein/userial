@@ -389,7 +389,6 @@
 
 (defmacro make-list-serializer (type element-type &key layer)
   "Make a serialize/unserialize pair for the key TYPE where each element is serialized with the key ELEMENT-TYPE."
-  (format t "Foo~%")
   `(progn
      (define-serializer (,type value :layer ,layer)
        (declare (type list value))
@@ -400,3 +399,47 @@
        (unserialize-let* (:uint32 len)
          (loop :for ii :from 1 :to len
                :collecting (unserialize ,element-type))))))
+
+(defmacro make-vector-serializer (type element-type length &key layer)
+  (let ((elt (gensym "ELT-")))
+    `(progn
+       (define-serializer (,type value :layer ,layer)
+         (declare (type (vector * ,length) value))
+         (loop :for ,elt :across value
+            :do (serialize ,element-type ,elt)))
+       (define-unserializer (,type :layer ,layer)
+         (vector ,@(loop :for elt :from 0 :below length
+                      :collecting `(unserialize ,element-type)))))))
+
+(define-serializer (:keyword value)
+  (declare (type symbol value))
+  (serialize :string (symbol-name value)))
+
+(define-unserializer (:keyword)
+  (unserialize-let* (:string name)
+    (intern name :keyword)))
+
+(define-serializer (:symbol value)
+  (declare (type symbol value))
+  (serialize* :string (symbol-name value)
+              :string (package-name (symbol-package value))))
+
+(define-unserializer (:symbol)
+  (unserialize-let* (:string name :string package)
+    (intern name package)))
+
+(defmacro make-alias-serializer (is-key was-key &key layer was-layer)
+  (let ((keysym (gensym "KEY-")))
+    `(progn
+       (contextl:define-layered-method serialize ,@(when layer
+                                                         `(:in-layer ,layer))
+             ((,keysym (eql ,is-key)) value &rest rest &key &allow-other-keys)
+         (declare (ignore ,keysym))
+         (contextl:with-active-layers (,@(when was-layer (list was-layer)))
+           (apply #'serialize ,was-key value rest)))
+       (contextl:define-layered-method unserialize ,@(when layer
+                                                           `(:in-layer ,layer))
+             ((,keysym (eql ,is-key)) &rest rest &key &allow-other-keys)
+         (declare (ignore ,keysym))
+         (contextl:with-active-layers (,@(when was-layer (list was-layer)))
+           (apply #'unserialize ,was-key rest))))))
