@@ -387,6 +387,7 @@
        (unserialize-accessors* ,value ,@fields)
        ,value)))
 
+;;; maker to create serializers for lists
 (defmacro make-list-serializer (type element-type &key layer)
   "Make a serialize/unserialize pair for the key TYPE where each element is serialized with the key ELEMENT-TYPE."
   `(progn
@@ -400,6 +401,7 @@
          (loop :for ii :from 1 :to len
                :collecting (unserialize ,element-type))))))
 
+;;; maker to create serializers for fixed length vectors
 (defmacro make-vector-serializer (type element-type length &key layer)
   (let ((elt (gensym "ELT-"))
         (value (gensym "VALUE-")))
@@ -412,6 +414,7 @@
          (vector ,@(loop :for elt :from 0 :below length
                       :collecting `(unserialize ,element-type)))))))
 
+;;; serializer for keywords
 (define-serializer (:keyword value)
   (declare (type symbol value))
   (serialize :string (symbol-name value)))
@@ -420,6 +423,7 @@
   (unserialize-let* (:string name)
     (intern name :keyword)))
 
+;;; serializer for symbols
 (define-serializer (:symbol value)
   (declare (type symbol value))
   (serialize* :string (symbol-name value)
@@ -429,6 +433,7 @@
   (unserialize-let* (:string name :string package)
     (intern name package)))
 
+;;; maker for aliasing serializers
 (defmacro make-alias-serializer (is-key was-key &key layer)
   (let ((keysym (gensym "KEY-"))
         (value (gensym "VAL-"))
@@ -446,11 +451,13 @@
          (declare (ignore ,keysym))
          (apply #'unserialize ,was-key ,rest)))))
 
-(defmacro make-key-slot-serializer ((key var
+;;; serializer for objects fetched by a key
+(defmacro make-key-*-serializer (serialize-it unserialize-it
+                                 (key var
                                          type-getter-var-list
                                          finder-form
                                          &key layer extra)
-                                    &rest type-slot-pairs)
+                                    &rest type-*-pairs)
   `(progn
      (define-serializer (,key ,var :layer ,layer :extra ,extra)
        (serialize* ,@(loop :for aa :on type-getter-var-list :by #'cdddr
@@ -459,10 +466,30 @@
                                            (if (symbolp ff)
                                                `(slot-value ,var ',ff)
                                                ff)))))
-       (serialize-slots* ,var ,@type-slot-pairs))
+       (,serialize-it ,var ,@type-*-pairs))
      (define-unserializer (,key :layer ,layer
                                 :extra (,var ,@extra))
        (declare (ignorable ,var))
        (unserialize-let* ,(loop :for aa :on type-getter-var-list :by #'cdddr
                              :appending (list (first aa) (third aa)))
-         (unserialize-slots* ,finder-form ,@type-slot-pairs)))))
+         (,unserialize-it ,finder-form ,@type-*-pairs)))))
+
+(defmacro make-key-slot-serializer ((key var
+                                         type-getter-var-list
+                                         finder-form
+                                         &key layer extra)
+                                    &rest type-slot-pairs)
+  `(make-key-*-serializer serialize-slots* unserialize-slots*
+                          (,key ,var ,type-getter-var-list ,finder-form
+                                :layer ,layer :extra ,extra)
+                          ,@type-slot-pairs))
+
+(defmacro make-key-accessor-serializer ((key var
+                                             type-getter-var-list
+                                             finder-form
+                                             &key layer extra)
+                                        &rest type-accessor-pairs)
+  `(make-key-*-serializer serialize-accessors* unserialize-accessors*
+                          (,key ,var ,type-getter-var-list ,finder-form
+                                :layer ,layer :extra ,extra)
+                          ,@type-accessor-pairs))
