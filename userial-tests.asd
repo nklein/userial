@@ -8,8 +8,8 @@
   :licence "MIT"
   :depends-on ("userial" "nst")
   :components ((:module "userial"
-		:components ((:module "tests"
-			      :serial t
-			      :components ((:file "package")
-					   (:file "buffer")
-					   (:file "serialize")))))))
+                :components ((:module "tests"
+                              :serial t
+                              :components ((:file "package")
+                                           (:file "buffer")
+                                           (:file "serialize")))))))

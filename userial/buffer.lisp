@@ -22,13 +22,13 @@
   (declare (type bufsize initial-capacity)
            (optimize (speed 3)))
   (make-array (list initial-capacity)
-	      :element-type 'uchar
-	      :initial-element 0
-	      :fill-pointer 0
-	      :adjustable t))
+              :element-type 'uchar
+              :initial-element 0
+              :fill-pointer 0
+              :adjustable t))
 
 (declaim (special *buffer*)
-	 (type buffer *buffer*))
+         (type buffer *buffer*))
 (defvar *buffer* (make-buffer))
 
 (declaim (inline get-buffer)
@@ -42,7 +42,7 @@
      ,@body))
 
 (declaim (inline buffer-length)
-	 (ftype (function () bufsize) buffer-length))
+         (ftype (function () bufsize) buffer-length))
 (defun buffer-length ()
   "Returns the current length of the BUFFER"
   (declare (optimize (speed 3)))
@@ -57,7 +57,7 @@
   *buffer*)
 
 (declaim (inline buffer-capacity)
-	 (ftype (function () bufsize) buffer-capacity))
+         (ftype (function () bufsize) buffer-capacity))
 (defun buffer-capacity ()
   "Returns the current capacity of the BUFFER"
   (the bufsize (array-dimension *buffer* 0)))
@@ -67,21 +67,21 @@
   "Sets the capacity of the BUFFER to NEW-CAPACITY"
   (declare (type bufsize new-capacity))
   (adjust-array *buffer* (list new-capacity)
-		:fill-pointer
-		(min (buffer-length) new-capacity)))
+                :fill-pointer
+                (min (buffer-length) new-capacity)))
 
 (declaim (ftype (function (&optional bufsize) buffer)
-		buffer-expand-if-needed))
+                buffer-expand-if-needed))
 (defun buffer-expand-if-needed (&optional (amount 1))
   "Expand the BUFFER if needed to accomodate EXPAND-BY more bytes"
   (declare (type bufsize amount)
            (optimize (speed 3)))
   (let ((capacity    (buffer-capacity))
-	(needs-to-be (+ (buffer-length) amount)))
+        (needs-to-be (+ (buffer-length) amount)))
     (declare (type bufsize capacity needs-to-be))
     (when (< capacity needs-to-be)
       (setf (buffer-capacity)
-	    (the bufsize
+            (the bufsize
               (max needs-to-be
                    (the bufsize
                      (min (* capacity 2)
@@ -89,7 +89,7 @@
   *buffer*)
 
 (declaim (inline buffer-advance)
-	 (ftype (function (&optional bufsize) buffer) buffer-advance))
+         (ftype (function (&optional bufsize) buffer) buffer-advance))
 (defun buffer-advance (&optional (amount 1))
   "Advances the BUFFER by AMOUNT bytes"
   (declare (type bufsize amount))
@@ -113,7 +113,7 @@
   "Get a byte from the BUFFER"
   (declare (optimize (speed 3)))
   (values (aref *buffer* (buffer-length))
-	  (buffer-advance 1)))
+          (buffer-advance 1)))
 
 (declaim (ftype (function () buffer) buffer-rewind))
 (defun buffer-rewind ()
@@ -129,7 +129,7 @@
        (declare (type uint ,value-sym)
                 (optimize (speed 3)))
        (progn ,@(loop :for ii :from (1- bytes) :downto 0
-		    :collecting `(buffer-add-byte
+                    :collecting `(buffer-add-byte
                                   (ldb (byte 8 ,(* 8 ii)) ,value-sym)))
               *buffer*))))
 
@@ -137,10 +137,10 @@
   "Get BYTES bytes (most-significant byte first)"
   (let ((value-sym (gensym "VALUE-")))
     `(let ((,value-sym 0))
-       (declare	(type uint ,value-sym)
+       (declare (type uint ,value-sym)
                 (optimize (speed 3)))
        (progn
-	 ,@(loop :for ii :from (1- bytes) :downto 0
-		 :collecting `(setf (ldb (byte 8 ,(* 8 ii)) ,value-sym)
-				    (buffer-get-byte)))
-	 (values ,value-sym *buffer*)))))
+         ,@(loop :for ii :from (1- bytes) :downto 0
+                 :collecting `(setf (ldb (byte 8 ,(* 8 ii)) ,value-sym)
+                                    (buffer-get-byte)))
+         (values ,value-sym *buffer*)))))

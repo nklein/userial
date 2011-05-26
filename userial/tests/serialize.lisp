@@ -19,14 +19,14 @@
 ;;; criterion to check that we can unserialize a serialized a bounded int
 (nst:def-criterion-alias (:sample-ints tag low high)
     `(:sample :sample-size 32
-	      :domains ((x (bounded-integer :low ,low :high ,high)))
-	      :verify (= x (serialize-unserialize ,tag x))))
+              :domains ((x (bounded-integer :low ,low :high ,high)))
+              :verify (= x (serialize-unserialize ,tag x))))
 
 ;;; criterion to check that we can unserialize a serialized strings
 (nst:def-criterion-alias (:sample-strings tag)
     `(:sample :sample-size 32
-	      :domains ((x string))
-	      :verify (equal x (serialize-unserialize ,tag x))))
+              :domains ((x string))
+              :verify (equal x (serialize-unserialize ,tag x))))
 
 ;;; test various unsigned integer encode/decode routines
 (nst:def-test-group test-uint-serializing ()
@@ -65,9 +65,9 @@
 
 ;;; prepare an enum and bitfield type for testing
 (make-enum-serializer     :alphas (:a :b :c :d :e :f :g :h :i :j :k :l :m
-				   :n :o :p :q :r :s :t :u :v :w :x :y :z))
+                                   :n :o :p :q :r :s :t :u :v :w :x :y :z))
 (make-bitfield-serializer :colors (:red :orange :yellow :green :blue
-				   :indigo :violet :white :black))
+                                   :indigo :violet :white :black))
 
 ;;; verify that the enums and bitfields serialize as expected
 (nst:def-test-group test-enum/bitfield-serializing ()
@@ -119,7 +119,7 @@
     (with-buffer (make-buffer 6)
       (serialize :string "Fo☺")))
   (nst:def-test serialize-byte-array (:array-equalp
-				         (4 3 70 111 111))
+                                         (4 3 70 111 111))
     (with-buffer (make-buffer 5)
       (serialize :bytes (with-buffer (make-buffer 5)
                           (serialize :string "Foo")))))
@@ -129,7 +129,7 @@
       (serialize :raw-bytes (with-buffer (make-buffer 4)
                               (serialize :string "Foo")))))
   #+does-not-work-yet (nst:def-test serialize-unserialize-strings
-			  (:sample-strings :string))
+                          (:sample-strings :string))
   (nst:def-test unserialize-ascii-string (:equal "Foo")
     (serialize-unserialize :string "Foo"))
   #+sbcl
@@ -167,7 +167,7 @@
       (serialize* :uint16 0 :uint16 256 :uint16 1187 :uint16 65535)))
   (nst:def-test serialize-int16 (:array-equalp (128   0    128   1     127 255
                                                 129   0    127   0
-						255 255      0   0))
+                                                255 255      0   0))
     (with-buffer (make-buffer 14)
       (serialize* :int16 0 :int16 1 :int16 -1
                   :int16 256 :int16 -256
@@ -199,14 +199,14 @@
 
 (nst:def-test-group test-slot-and-accessor-serializers (sample-people)
   (nst:def-test test-private-slot-serializer (:seq (:equalp alice)
-						   (:equalp bob)
-						   (:equalp carol))
+                                                   (:equalp bob)
+                                                   (:equalp carol))
     (list (serialize-unserialize :person-private alice)
-	  (serialize-unserialize :person-private bob)
-	  (serialize-unserialize :person-private carol)))
+          (serialize-unserialize :person-private bob)
+          (serialize-unserialize :person-private carol)))
   (nst:def-test test-public-slot-serializer (:seq (:equalp "Alice")
-						  (:eql :a)
-						  (:not (:equalp alice)))
+                                                  (:eql :a)
+                                                  (:not (:equalp alice)))
     (let ((rr (serialize-unserialize :person-public alice)))
       (list (person-name rr) (person-initial rr) rr)))
   (nst:def-test test-serialize-slots* (:array-equalp (0 31))

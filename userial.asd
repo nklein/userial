@@ -10,10 +10,10 @@
   :depends-on ("ieee-floats" "trivial-utf-8" "contextl")
   :components ((:module "userial"
                 :serial t
-		:components ((:file "package")
-			     (:file "buffer")
+                :components ((:file "package")
+                             (:file "buffer")
                              (:file "util")
-			     (:file "serialize")
-			     (:file "peek")))
-	       (:static-file "README.mkdn")
-	       (:static-file "LICENSE.txt")))
+                             (:file "serialize")
+                             (:file "peek")))
+               (:static-file "README.mkdn")
+               (:static-file "LICENSE.txt")))

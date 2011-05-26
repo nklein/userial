@@ -226,11 +226,11 @@
 
 ;;; floating-point type serializers/deserializers
 (make-float-serializer :float32 single-float 4
-		       ieee-floats:encode-float32
-		       ieee-floats:decode-float32)
+                       ieee-floats:encode-float32
+                       ieee-floats:decode-float32)
 (make-float-serializer :float64 double-float 8
-		       ieee-floats:encode-float64
-		       ieee-floats:decode-float64)
+                       ieee-floats:encode-float64
+                       ieee-floats:decode-float64)
 
 ;;; byte arrays without size encoded with them
 (define-serializer (:raw-bytes value
@@ -292,20 +292,20 @@
     `(progn
        (define-serializer (,type value :layer ,layer)
          (declare (type symbol value))
-	 (let ((value (ecase value
-			,@(loop :for ii :from 0
-			        :for vv :in choices
-			        :collecting (list (if vv vv '(nil)) ii)))))
-	   (declare (type (unsigned-byte ,(* bytes 8)) value))
-	   (unroll-add-bytes value ,bytes)))
+         (let ((value (ecase value
+                        ,@(loop :for ii :from 0
+                                :for vv :in choices
+                                :collecting (list (if vv vv '(nil)) ii)))))
+           (declare (type (unsigned-byte ,(* bytes 8)) value))
+           (unroll-add-bytes value ,bytes)))
        (define-unserializer (,type :layer ,layer)
          (let ((value (unroll-get-bytes ,bytes)))
            (declare (type (unsigned-byte ,(* bytes 8)) value))
-	   (let ((value (ecase value
-			  ,@(loop :for ii :from 0
+           (let ((value (ecase value
+                          ,@(loop :for ii :from 0
                                   :for vv :in choices
                                   :collecting (list ii vv)))))
-	     (declare (type symbol value))
+             (declare (type symbol value))
              value))))))
 
 ;;; define standard enum methods
@@ -317,26 +317,26 @@
     `(progn
        (define-serializer (,type (value cons) :layer ,layer)
          (declare (type cons value))
-	 (let ((val (reduce #'(lambda (acc &optional sym)
-				  (logior acc
-					  (ecase sym
-					    ,@(loop :for ii :from 0
-						    :for vv :in choices
-						    :collecting
-						      (list vv (expt 2 ii))))))
-			      value
-			      :initial-value 0)))
-	   (declare (type (unsigned-byte ,(* bytes 8)) val))
-	   (unroll-add-bytes val ,bytes)))
+         (let ((val (reduce #'(lambda (acc &optional sym)
+                                  (logior acc
+                                          (ecase sym
+                                            ,@(loop :for ii :from 0
+                                                    :for vv :in choices
+                                                    :collecting
+                                                      (list vv (expt 2 ii))))))
+                              value
+                              :initial-value 0)))
+           (declare (type (unsigned-byte ,(* bytes 8)) val))
+           (unroll-add-bytes val ,bytes)))
        (define-serializer (,type (value symbol) :layer ,layer)
          (declare (type symbol value))
-	 (let ((val (ecase value
-		      ((nil) 0)
-		      ,@(loop :for ii :from 0
-			      :for vv :in choices
-			      :collecting (list vv (expt 2 ii))))))
-	   (declare (type (unsigned-byte ,(* bytes 8)) val))
-	   (unroll-add-bytes val ,bytes)))
+         (let ((val (ecase value
+                      ((nil) 0)
+                      ,@(loop :for ii :from 0
+                              :for vv :in choices
+                              :collecting (list vv (expt 2 ii))))))
+           (declare (type (unsigned-byte ,(* bytes 8)) val))
+           (unroll-add-bytes val ,bytes)))
        (define-unserializer (,type :layer ,layer)
          (let ((value (unroll-get-bytes ,bytes)))
            (declare (type (unsigned-byte ,(* bytes 8)) value))
