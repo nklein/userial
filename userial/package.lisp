@@ -20,7 +20,10 @@
 	   :make-bitfield-serializer
 	   :make-enum-serializer
 	   :make-float-serializer
+           :make-global-variable-serializer
 	   :make-int-serializer
+           :make-key-accessor-serializer
+           :make-key-slot-serializer
            :make-list-serializer
            :make-simple-serializer
 	   :make-slot-serializer

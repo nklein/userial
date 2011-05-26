@@ -493,3 +493,13 @@
                           (,key ,var ,type-getter-var-list ,finder-form
                                 :layer ,layer :extra ,extra)
                           ,@type-accessor-pairs))
+
+(defmacro make-global-variable-serializer
+    ((key value-key &key layer) &rest global-vars)
+  (let ((var-sym (gensym "VAR-"))
+        (sym (gensym "SYM-")))
+    `(make-key-accessor-serializer
+         (,key ,var-sym (:symbol (ecase ,var-sym (,global-vars ,var-sym)) ,sym)
+                        (ecase ,sym (,global-vars ,sym))
+                        :layer ,layer)
+         ,value-key symbol-value)))
