@@ -401,11 +401,12 @@
                :collecting (unserialize ,element-type))))))
 
 (defmacro make-vector-serializer (type element-type length &key layer)
-  (let ((elt (gensym "ELT-")))
+  (let ((elt (gensym "ELT-"))
+        (value (gensym "VALUE-")))
     `(progn
-       (define-serializer (,type value :layer ,layer)
+       (define-serializer (,type ,value :layer ,layer)
          (declare (type (vector * ,length) value))
-         (loop :for ,elt :across value
+         (loop :for ,elt :across ,value
             :do (serialize ,element-type ,elt)))
        (define-unserializer (,type :layer ,layer)
          (vector ,@(loop :for elt :from 0 :below length
@@ -428,18 +429,40 @@
   (unserialize-let* (:string name :string package)
     (intern name package)))
 
-(defmacro make-alias-serializer (is-key was-key &key layer was-layer)
-  (let ((keysym (gensym "KEY-")))
+(defmacro make-alias-serializer (is-key was-key &key layer)
+  (let ((keysym (gensym "KEY-"))
+        (value (gensym "VAL-"))
+        (rest (gensym "REST-")))
     `(progn
        (contextl:define-layered-method serialize ,@(when layer
                                                          `(:in-layer ,layer))
-             ((,keysym (eql ,is-key)) value &rest rest &key &allow-other-keys)
+             ((,keysym (eql ,is-key)) ,value &rest ,rest
+                                             &key &allow-other-keys)
          (declare (ignore ,keysym))
-         (contextl:with-active-layers (,@(when was-layer (list was-layer)))
-           (apply #'serialize ,was-key value rest)))
+         (apply #'serialize ,was-key ,value ,rest))
        (contextl:define-layered-method unserialize ,@(when layer
                                                            `(:in-layer ,layer))
-             ((,keysym (eql ,is-key)) &rest rest &key &allow-other-keys)
+             ((,keysym (eql ,is-key)) &rest ,rest &key &allow-other-keys)
          (declare (ignore ,keysym))
-         (contextl:with-active-layers (,@(when was-layer (list was-layer)))
-           (apply #'unserialize ,was-key rest))))))
+         (apply #'unserialize ,was-key ,rest)))))
+
+(defmacro make-key-slot-serializer ((key var
+                                         type-getter-var-list
+                                         finder-form
+                                         &key layer extra)
+                                    &rest type-slot-pairs)
+  `(progn
+     (define-serializer (,key ,var :layer ,layer :extra ,extra)
+       (serialize* ,@(loop :for aa :on type-getter-var-list :by #'cdddr
+                        :appending (list (first aa)
+                                         (let ((ff (second aa)))
+                                           (if (symbolp ff)
+                                               `(slot-value ,var ',ff)
+                                               ff)))))
+       (serialize-slots* ,var ,@type-slot-pairs))
+     (define-unserializer (,key :layer ,layer
+                                :extra (,var ,@extra))
+       (declare (ignorable ,var))
+       (unserialize-let* ,(loop :for aa :on type-getter-var-list :by #'cdddr
+                             :appending (list (first aa) (third aa)))
+         (unserialize-slots* ,finder-form ,@type-slot-pairs)))))
