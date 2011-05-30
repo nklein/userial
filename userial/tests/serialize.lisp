@@ -159,15 +159,15 @@
     (with-buffer (make-buffer 6)
       (serialize* :uint8 0 :uint8 255 :uint8 1 :uint8 128
                   :boolean t :boolean nil)))
-  (nst:def-test serialize-int8 (:array-equalp (128 129 127 255 0))
+  (nst:def-test serialize-int8 (:array-equalp (0 1 255 127 128))
     (with-buffer (make-buffer 5)
       (serialize* :int8 0 :int8 1 :int8 -1 :int8 127 :int8 -128)))
   (nst:def-test serialize-uint16 (:array-equalp (0 0  1 0  4 163  255 255))
     (with-buffer (make-buffer 8)
       (serialize* :uint16 0 :uint16 256 :uint16 1187 :uint16 65535)))
-  (nst:def-test serialize-int16 (:array-equalp (128   0    128   1     127 255
-                                                129   0    127   0
-                                                255 255      0   0))
+  (nst:def-test serialize-int16 (:array-equalp (  0   0      0   1     255 255
+                                                  1   0    255   0
+                                                127 255    128   0))
     (with-buffer (make-buffer 14)
       (serialize* :int16 0 :int16 1 :int16 -1
                   :int16 256 :int16 -256

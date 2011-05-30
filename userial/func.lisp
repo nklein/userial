@@ -1,113 +1,122 @@
 (in-package :userial)
 
+(defun retrieve-until (until llist result)
+  (cond
+    ((or (null llist)
+         (member (first llist) until))  (nreverse result))
+    (t (retrieve-until until
+                       (rest llist)
+                       (cons (first llist) result)))))
+
+(defun retrieve-paired-until (until llist result)
+  (cond
+    ((or (null llist)
+         (member (first llist) until))  (nreverse result))
+    ((member (first llist) '(&optional &key &allow-other-keys))
+     (retrieve-paired-until until
+                            (rest llist)
+                            (cons (first llist) result)))
+    ((= (length llist) 1)
+        (error "Odd number of key-variable pairs at ~S" llist))
+    (t (retrieve-paired-until until
+                              (rest (rest llist))
+                              (cons (list (second llist)
+                                          (first llist)
+                                          (second llist))
+                                    result)))))
+
+(defun retrieve-from-until (start until llist)
+  (if (member start '(&optional &key))
+      (retrieve-paired-until until (member start llist) nil)
+      (retrieve-until until (member start llist) nil)))
+
 (defun pluck-apart-keyed-lambda-list (llist)
-  (labels ((retrieve-until (until llist result)
-             (cond
-               ((or (null llist)
-                    (member (first llist) until))  (nreverse result))
-               (t (retrieve-until until
-                                  (rest llist)
-                                  (cons (first llist) result)))))
-           (retrieve-paired-until (until llist result)
-             (cond
-               ((or (null llist)
-                    (member (first llist) until))  (nreverse result))
-               ((member (first llist) '(&optional &key &allow-other-keys))
-                    (retrieve-paired-until until
-                                           (rest llist)
-                                           (cons (first llist) result)))
-               ((= (length llist) 1)
-                    (error "Odd number of key-variable pairs at ~S" llist))
-               (t (retrieve-paired-until until
-                                         (rest (rest llist))
-                                         (cons (list (second llist)
-                                                     (first llist)
-                                                     (second llist))
-                                               result)))))
-           (retrieve-from-until (start until llist)
-             (if (member start '(&optional &key))
-                 (retrieve-paired-until until (member start llist) nil)
-                 (retrieve-until until (member start llist) nil))))
-    (let* ((required (retrieve-paired-until '(&optional &rest &key)
-                                            llist
-                                            nil))
-           (optional (retrieve-from-until '&optional
-                                          '(&rest &key)
-                                          llist))
-           (rest     (retrieve-from-until '&rest '(&key) llist))
-           (key      (retrieve-from-until '&key '(&allow-other-keys
-                                                  &aux) llist))
-           (allow    (retrieve-from-until '&allow-other-keys '(&aux) llist))
-           (aux      (retrieve-from-until '&aux '() llist)))
-      (values required optional rest key allow aux))))
+  (let* ((required (retrieve-paired-until '(&optional &rest &key) llist nil))
+         (optional (retrieve-from-until '&optional '(&rest &key) llist))
+         (rest     (retrieve-from-until '&rest '(&key) llist))
+         (key      (retrieve-from-until '&key '(&allow-other-keys &aux) llist))
+         (allow    (retrieve-from-until '&allow-other-keys '(&aux) llist))
+         (aux      (retrieve-from-until '&aux '() llist)))
+    (values required optional rest key allow aux)))
+
+(defun sym-for-opt (opt-cons)
+  (let ((opt (first opt-cons)))
+    (if (listp opt)
+        (first opt)
+        opt)))
+
+(defun sym-for-key (key-cons)
+  (let ((key (first key-cons)))
+    (if (listp key)
+        (if (listp (first key))
+            (second (first key))
+            (first key))
+        key)))
+
+(defun key-for-key (key-cons)
+  (let ((key (first key-cons)))
+    (if (listp key)
+        (if (listp (first key))
+            (first (first key))
+            (intern (symbol-name (first key)) :keyword))
+        (intern (symbol-name key) :keyword))))
+
+(defun it-or-third (item)
+  (if (listp item)
+      (third item)
+      item))
+
+(defun serialize-req (item)
+  `(serialize ,(second item) ,(car item)))
+
+(defun serialize-opt (item)
+  `(when ,(third (first item))
+     (serialize ,(second item) ,(first (first item)))))
+
+(defun serialize-key (item)
+  `(when ,(third (first item))
+     (serialize ,(second item)
+                ,(if (listp (first (first item)))
+                     (second (first (first item)))
+                     (first (first item))))))
+
+(defun argify (item)
+  (if (symbolp item)
+      item
+      (let ((argp (gensym "ARG-P-")))
+        (unless (listp (car item))
+          (setf (car item) (list (car item) "UNSPECIFIED" argp)))
+        (case (length (car item))
+          (1 (setf (car item)
+                   (append (first item) (list "UNSPECIFIED" argp))))
+          (2 (setf (first item)
+                   (append (first item) (list argp)))))
+        (first item))))
+
+(defun got-arg (item)
+  `(when ,(third (first item))
+     '(,(sym-for-key item))))
 
 (defmacro define-serializing-funcall ((buffer-func func &key layer)
                                         (&rest keyed-lambda-list)
                                       &body body)
   (let ((args (gensym "ARGS-"))
         (which (gensym "WHICH-")))
-    (labels ((sym-for-opt (opt-cons)
-               (let ((opt (first opt-cons)))
-                 (if (listp opt)
-                     (first opt)
-                     opt)))
-             (sym-for-key (key-cons)
-               (let ((key (first key-cons)))
-                 (if (listp key)
-                     (if (listp (first key))
-                         (second (first key))
-                         (first key))
-                     key)))
-             (key-for-key (key-cons)
-               (let ((key (first key-cons)))
-                 (if (listp key)
-                     (if (listp (first key))
-                         (first (first key))
-                         (intern (symbol-name (first key)) :keyword))
-                     (intern (symbol-name key) :keyword))))
-             (it-or-third (item)
-               (if (listp item)
-                   (third item)
-                   item))
-             (serialize-req (item)
-               `(serialize ,(second item) ,(car item)))
-             (serialize-opt (item)
-               `(when ,(third (first item))
-                  (serialize ,(second item) ,(first (first item)))))
-             (serialize-key (item)
-               `(when ,(third (first item))
-                  (serialize ,(second item)
-                             ,(if (listp (first (first item)))
-                                  (second (first (first item)))
-                                  (first (first item))))))
-             (unserialize-req (item)
+    (labels ((unserialize-req (item)
                `(push (unserialize ,(second item)) ,args))
+
              (unserialize-opt (item)
                `(when (member ',(sym-for-opt item) ,which)
                   (push (unserialize ,(second item)) ,args)))
+
              (unserialize-key (item)
                `(when (member ',(sym-for-key item) ,which)
                   (push ,(key-for-key item) ,args)
-                  (push (unserialize ,(second item)) ,args)))
-             (argify (item)
-               (if (symbolp item)
-                   item
-                   (let ((argp (gensym "ARG-P-")))
-                     (unless (listp (car item))
-                       (setf (car item)
-                             (list (car item) "UNSPECIFIED" argp)))
-                     (case (length (car item))
-                       (1 (setf (car item)
-                                (append (first item)
-                                       (list "UNSPECIFIED" argp))))
-                       (2 (setf (first item)
-                                (append (first item) (list argp)))))
-                     (first item))))
-             (got-arg (item)
-               `(when ,(third (first item))
-                  '(,(sym-for-key item)))))
+                  (push (unserialize ,(second item)) ,args))))
+      
       (multiple-value-bind (req opt rst key allow aux)
           (pluck-apart-keyed-lambda-list keyed-lambda-list)
+        
         `(progn
            ,(when (or (rest opt) (rest key))
                   `(make-bitfield-serializer
@@ -115,6 +124,7 @@
                       (,@(mapcar #'sym-for-opt (rest opt))
                        ,@(mapcar #'sym-for-key (rest key)))
                       :layer ,layer))
+           
            (defun ,buffer-func (,@(mapcar #'car req)
                                 ,@(mapcar #'argify opt)
                                 ,@(mapcar #'argify key))
@@ -126,12 +136,14 @@
              ,@(mapcar #'serialize-req req)
              ,@(mapcar #'serialize-opt (rest opt))
              ,@(mapcar #'serialize-key (rest key)))
+           
            (defun ,func ()
              (let ((,which (unserialize ',buffer-func))
                    ,args)
                ,@(mapcar #'unserialize-req req)
                ,@(mapcar #'unserialize-opt (rest opt))
                ,@(mapcar #'unserialize-key (rest key))
+               
                (apply #'(lambda (,@(mapcar #'it-or-third req)
                                  ,@(mapcar #'it-or-third opt)
                                  ,@rst
@@ -139,8 +151,7 @@
                                  ,@allow
                                  ,@aux)
                           ,@body)
-                      (nreverse ,args))))
-           )))))
+                      (nreverse ,args)))))))))
 
 #|
 (define-serializing-funcall (buffer-myfunc myfunc :layer nil)
@@ -152,4 +163,9 @@
         &aux (g (+ a 6)))
   ;;; body goes here
   (list a b c d e e-p f g))
+
+(define-serializing-funcall (mylogin-ser mylogin-uns)
+       (:string username :string passwd &optional :string (nickname username))
+  (format nil "LOGIN: USER = ~S, PASSWD = ~S, NICKNAME = ~S"
+               username passwd nickname))
 |#

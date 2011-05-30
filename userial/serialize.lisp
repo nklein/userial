@@ -160,6 +160,9 @@
                    (t (fetch-bytes (add (- byte 128)) (* offset 128))))))))
     (fetch-bytes)))
 
+(defmacro twos-complement (val bytes)
+  `(1+ (logxor ,val ,(1- (expt 2 (* bytes 8))))))
+
 (defmacro make-int-serializer (key bytes &key layer)
   "Make SERIALIZE/UNSERIALIZE methods for a signed-int of BYTES bytes in length dispatched by KEY."
   (let ((vv (gensym "VV-")))
@@ -167,13 +170,17 @@
        (define-serializer (,key value :layer ,layer)
          (declare (type (signed-byte ,(* bytes 8)) value)
                   (optimize (speed 3)))
-         (let ((,vv (+ value ,(expt 2 (1- (* bytes 8))))))
+         (let ((,vv (if (minusp value)
+                        (twos-complement (- value) ,bytes)
+                        value)))
            (unroll-add-bytes ,vv ,bytes)))
        (define-unserializer (,key :layer ,layer)
          (declare (optimize (speed 3)))
          (let ((,vv (unroll-get-bytes ,bytes)))
            (declare (type (unsigned-byte ,(* bytes 8)) ,vv))
-           (- ,vv ,(expt 2 (1- (* bytes 8)))))))))
+           (if (logbitp ,(1- (* bytes 8)) ,vv)
+               (- (twos-complement ,vv ,bytes))
+               ,vv))))))
 
 ;;; define standard signed-int serialize/deserialize methods
 (make-int-serializer :int8  1)
