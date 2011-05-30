@@ -14,6 +14,7 @@
            :buffer-get-byte
            :buffer-rewind
            :define-serializer
+           :define-serializing-funcall
            :define-unserializer
            :make-accessor-serializer
            :make-alias-serializer

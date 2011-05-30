@@ -14,6 +14,7 @@
                              (:file "buffer")
                              (:file "util")
                              (:file "serialize")
+                             (:file "func")
                              (:file "peek")))
                (:static-file "README.mkdn")
                (:static-file "LICENSE.txt")))

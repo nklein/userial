@@ -304,7 +304,7 @@
            (let ((value (ecase value
                           ,@(loop :for ii :from 0
                                   :for vv :in choices
-                                  :collecting (list ii vv)))))
+                                  :collecting (list ii `',vv)))))
              (declare (type symbol value))
              value))))))
 
@@ -343,7 +343,10 @@
            (assert (< value ,(expt 2 (length choices))))
            (loop :for ii :from 0 :below ,(length choices)
                  :when (plusp (logand value (expt 2 ii)))
-                 :collect (svref (vector ,@choices) ii)))))))
+                 :collect (svref (vector ,@(mapcar #'(lambda (cc)
+                                                       `',cc)
+                                                   choices))
+                                 ii)))))))
 
 (defmacro make-simple-serializer ((type value factory &key layer extra)
                                    &rest pairs)
