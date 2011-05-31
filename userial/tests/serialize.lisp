@@ -28,13 +28,18 @@
               :domains ((x string))
               :verify (equal x (serialize-unserialize ,tag x))))
 
+(make-alias-serializer :word :uint16)
+(make-alias-serializer :dword :uint32)
+
 ;;; test various unsigned integer encode/decode routines
 (nst:def-test-group test-uint-serializing ()
   (:documentation "Test the various standard unsigned-int serialize/unserialize routines.")
   (nst:def-test serialize-uint8  (:sample-ints :uint8  0 #.(expt 2 8)))
   (nst:def-test serialize-uint16 (:sample-ints :uint16 0 #.(expt 2 16)))
+  (nst:def-test serialize-word   (:sample-ints :word   0 #.(expt 2 16)))
   (nst:def-test serialize-uint24 (:sample-ints :uint24 0 #.(expt 2 24)))
   (nst:def-test serialize-uint32 (:sample-ints :uint32 0 #.(expt 2 32)))
+  (nst:def-test serialize-dword  (:sample-ints :dword  0 #.(expt 2 32)))
   (nst:def-test serialize-uint48 (:sample-ints :uint48 0 #.(expt 2 48)))
   (nst:def-test serialize-uint64 (:sample-ints :uint64 0 #.(expt 2 64)))
   (nst:def-test serialize-uint   (:sample-ints :uint   0 #.(expt 2 128))))
@@ -165,13 +170,26 @@
   (nst:def-test serialize-uint16 (:array-equalp (0 0  1 0  4 163  255 255))
     (with-buffer (make-buffer 8)
       (serialize* :uint16 0 :uint16 256 :uint16 1187 :uint16 65535)))
+  (nst:def-test serialize-word (:array-equalp (0 0  1 0  4 163  255 255))
+    (with-buffer (make-buffer 8)
+      (serialize* :word 0 :word 256 :word 1187 :word 65535)))
+  (nst:def-test serialize-dword (:array-equalp (0 0 0 0    0 0 1 0
+                                                0 0 4 163  0 1 0 0))
+    (with-buffer (make-buffer 16)
+      (serialize* :dword 0 :dword 256 :dword 1187 :dword 65536)))
+  (nst:def-test serialize-uint (:array-equalp (0    128 2   163 9))
+    (with-buffer (make-buffer 5)
+      (serialize* :uint 0 :uint 256 :uint 1187)))
   (nst:def-test serialize-int16 (:array-equalp (  0   0      0   1     255 255
                                                   1   0    255   0
                                                 127 255    128   0))
     (with-buffer (make-buffer 14)
       (serialize* :int16 0 :int16 1 :int16 -1
                   :int16 256 :int16 -256
-                  :int16 32767 :int16 -32768))))
+                  :int16 32767 :int16 -32768)))
+  (nst:def-test serialize-int (:array-equalp (99 18  227 18))
+    (with-buffer (make-buffer 5)
+      (serialize* :int 1187 :int -1187))))
 
 ;;; test slot and accessor serializing
 (defstruct person
