@@ -683,7 +683,17 @@ into one of the above variables.
     (buffer-rewind)
     (unserialize :global-person)
     *moderator* => #S(PERSON :NAME "Patrick" :AGE 40 :COLOR "Green")
-    
+
+The USerial library allows one to alias serializers.  For example,
+if one were encoding object ids as unsigned 32-bit integers, one
+could do either of the following:
+
+    (make-uint-serializer :object-id 4)
+    (make-alias-serializer :object-id :uint32)
+
+The alias is not a direct alias.  It will involve one more function
+call that using the direct serializer, but it provides a convenient,
+self-documenting way to describe equivalent serializations.
 
 ### <a name="serializing-funcall">Function Call Serialization</a>
 
