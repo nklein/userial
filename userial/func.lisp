@@ -101,7 +101,8 @@
                                         (&rest keyed-lambda-list)
                                       &body body)
   (let ((args (gensym "ARGS-"))
-        (which (gensym "WHICH-")))
+        (which (gensym "WHICH-"))
+        (more-keys (gensym "MORE-KEYS-")))
     (labels ((unserialize-req (item)
                `(push (unserialize ,(second item)) ,args))
 
@@ -135,23 +136,27 @@
                                         ,@(mapcar #'got-arg (rest key))))))
              ,@(mapcar #'serialize-req req)
              ,@(mapcar #'serialize-opt (rest opt))
-             ,@(mapcar #'serialize-key (rest key)))
+             ,@(mapcar #'serialize-key (rest key))
+             *buffer*)
            
-           (defun ,func ()
-             (let ((,which (unserialize ',buffer-func))
+           (defun ,func (&rest ,more-keys &key &allow-other-keys)
+             (let (,@(when (or (rest opt) (rest key))
+                        `((,which (unserialize ',buffer-func))))
                    ,args)
                ,@(mapcar #'unserialize-req req)
                ,@(mapcar #'unserialize-opt (rest opt))
                ,@(mapcar #'unserialize-key (rest key))
                
-               (apply #'(lambda (,@(mapcar #'it-or-third req)
-                                 ,@(mapcar #'it-or-third opt)
-                                 ,@rst
-                                 ,@(mapcar #'it-or-third key)
-                                 ,@allow
-                                 ,@aux)
-                          ,@body)
-                      (nreverse ,args)))))))))
+               (values 
+                (apply #'(lambda (,@(mapcar #'it-or-third req)
+                                  ,@(mapcar #'it-or-third opt)
+                                  ,@rst
+                                  ,@(mapcar #'it-or-third key)
+                                  ,@allow
+                                  ,@aux)
+                           ,@body)
+                       (append (nreverse ,args) ,more-keys))
+                *buffer*))))))))
 
 #|
 (define-serializing-funcall (buffer-myfunc myfunc :layer nil)
