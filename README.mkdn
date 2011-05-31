@@ -16,6 +16,7 @@ Patrick Stein <pat@nklein.com>
   + [Serializing and Unserializing](#serialize)
   + [Serializing and Unserializing Multiple Items](#serialize*)
   + [Defining New Serializers](#define-serializers)
+  + [Function Call Serialization](#serializing-funcall)
   + [Pre-defined Serializers](#predefined-serializers)
 * [Sample Application: Game Protocol](#protocol)
   + [Opcodes](#opcodes)
@@ -260,6 +261,11 @@ and unserialize methods for common situations.  These macros are
 described in the
 ["Defining New Serializers" section](#define-serializers) below.
 
+There is a way to create a pair of functions where one serializes
+its arguments to a buffer and the other unserializes those arguments
+and executes a given body.  This is described in the
+["Function Call Serialization"](#serializing-funcall) section below.
+
 There are a variety of pre-defined `serialize` and `unserialize` methods.
 These are describe in the ["Pre-defined Serializers"](#predefined-serializers)
 section below.
@@ -341,7 +347,7 @@ is to replace the `let` construct in the above with a
            (login-name (unserialize :string))
            (password   (unserialize :string))
            (flags      (unserialize :login-flags)))
-      ...))
+      ...)
 
 To condense the above, one can use the `unserialize-let*` macro.  It
 takes a list of keyword/variable-names, a buffer (which is not
@@ -468,6 +474,13 @@ available when layer `:v1.2` is active, one could simply call:
     (make-int-serializer :signed-byte 1)
     (make-int-serializer :signed-quadword 8 :layer :v1.2)
 
+    
+This macro will serialize integers in big-endian
+[two's complement][twos-comp] form for the greatest compatibility with
+standard protocols.
+
+  [twos-comp]: (http://en.wikipedia.org/wiki/Two's_complement)
+  
 Similarly, if one wanted to create serialize and unserialize
 methods for unsigned bytes and unsigned doublewords, one could
 use the following macro:
@@ -475,7 +488,7 @@ use the following macro:
     (make-uint-serializer key bytes &key layer)
     (make-uint-serializer :unsigned-byte 1)
     (make-uint-serializer :unsigned-doubleword 4)
-    
+
 Note: the `bytes` argument to the `make-int-serializer` and
 `make-uint-serializer` macros must be a constant value available
 at the time the macro is expanded.
@@ -501,8 +514,8 @@ and 32-bits devoted to the integer portion.
 
 The USerial library defines macros for helping one encode bit fields
 (to represent choices where more than one possibility at a time is
-acceptable) and enumerations (to represent choices where only a single
-selection can be made).  These macros take a keyword used to specify the
+    acceptable) and enumerations (to represent choices where only a single
+    selection can be made).  These macros take a keyword used to specify the
 method and a list of choices.
 
     (make-bitfield-serializer :wants (:coffee :tea :sega) &key layer)
@@ -591,9 +604,142 @@ can do the following:
     
 The `make-list-serializer` can also take a `layer` keyword parameter.
 
+The USerial library allows one to create serializers with slots
+or accessors which allow a portion of the struct (or class) slots
+to be used as a key on the unserializing side to locate the object.  An
+example should serve to illustrate.  Given the above `person` struct
+and a `find-person-by-name` function, one might create a serializer
+which encodes a person's name and a new color such that the
+unserializing side will find the person struct for the named person
+and set the color.
+
+    (make-key-accessor-serializer
+        (:set-person-color found-person
+           (:string person-name pname)
+           (find-person-by-name pname))
+      :string person-color)
+    
+    ;; store the color and then change it locally
+    (defparameter *p* (make-person :name "Patrick" :age 40 :color "Green"))
+    (serialize :set-person-color *p*)
+    (setf (person-color *p*) "Orange")
+    
+    ;; restore the serialized color "Green"
+    (buffer-rewind)
+    (setf *p* (unserialize :set-person-color))
+
+One can incorporate more variables into either the key or the values
+and use either slots or accessors.
+
+    (make-key-slot-serializer (:change-person-attrs found-person
+                                  (:string name pname)
+                                  (find-person-by-name pname))
+      :uint8 age
+      :string color)
+      
+    (make-key-slot-serializer (:change-color-by-name-and-age found-person
+                                  (:string name p-name
+                                   :uint8 age p-age)
+                                  (find-person-by-name-and-age p-name p-age))
+      :string color)
+
+The USerial library allows one to create serializers which
+unserialize into global variables.  For example, suppose one
+had global variables `*moderator*` and `*author*`.  One could
+use the `:person-internal` serializer above create a serializer
+that lets one serialize a person that will be unserialized
+into one of the above variables.
+
+    (defparameter *moderator* (make-person :name "Patrick"
+                                           :age 40
+                                           :color "Green"))
+    (defparameter *author* nil)
+    
+    (make-global-variable-serializer (:global-person :person-internal)
+      *moderator* *author*)
+    
+    ;; serialize the moderator and clear it
+    (serialize :global-person '*moderator*)
+    (setf *moderator* nil)
+    
+    ;; rewind the buffer and restore the moderator
+    (buffer-rewind)
+    (unserialize :global-person)
+    *moderator* => #S(PERSON :NAME "Patrick" :AGE 40 :COLOR "Green")
+    
+
+### <a name="serializing-funcall">Function Call Serialization</a>
+
+Using the `define-serializing-funcall` macro, one can create
+a function which serializes its arguments to a buffer and a
+corresponding function which unserializes those arguments to
+execute a function body.  The macro takes two introductory
+forms and then a body.  The first introductory form contains
+the name for the serializing function, the name for the
+unserializing function, and an optional `layer` keyword
+argument.  The second form contains a USerial-enhanced
+lambda list for the function.  The enhanced lambda list
+precedes each required, optional, or keyword parameter
+with a USerial serialization keyword.
+
+    (define-serializing-funcall (func-to-buffer func-from-buffer &key layer)
+        (&rest userial-enhanced-lambda-list)
+      &body body)
+
+For example, given the `person` struct used in the previous
+section, one might choose to do something like this:
+
+    (define-serializing-funcall (prep-set-person-age do-set-person-age)
+        (:string name :uint8 age)
+      (let ((pp (find-person-by-name name)))
+        (when pp
+          (setf (person-age pp) age))
+          pp))
+
+Then, the sending side of the application can serialize a call to
+this function as follows:
+
+    (prep-set-person-age "Patrick" 39)
+         => #(7 80 97 116 114 105 99 107 39)
+
+The receiving side of the application can unserialize this function
+and invoke the given function body (assuming that `find-person-by-name`
+succeeds for "Patrick").
+
+    (with-buffer buffer-recvd
+      (do-set-person-age))
+         => #S(PERSON :NAME "Patrick" :AGE 39 :COLOR "Green")
+            #(7 80 97 116 114 105 99 107 39)
+
+One can use required, `&optional`, `&rest`, `&key`, and `&aux`
+parameters.  The required, `&optional`, and `&key` parameters
+must all be given a serialization keyword.  The `&rest` and
+`&aux` parameters do not use a serialization keyword.
+
+The serialization side does not accept `&allow-other-keys`.
+If the enhanced lambda list contains `&allow-other-keys`, it can
+be used on the unserializing side.
+
+Any `&optional` and `&key` parameters are given their defaults
+as compiled on the receiving side.  So, if one serializes a function call,
+sends that buffer to a second machine which has different default
+values for some parameters, the values used for defaults will be
+those compiled on the receiving side.  As such, the description
+of default values on the sending side may not necessarily reflect
+the default values that the receiving side will actually use.
+It is up to the application programmer whether this possibility
+is worth the expense of explicitly specifying the parameter on
+the sending side even if the desired value is the default.
+
 ### <a name="predefined-serializers">Pre-defined Serializers</a>
 
 The USerial library defines some commonly required serializers.
+
+For symbols, the USerial library defines serializers (and
+unserializers) for `:keyword` and `:symbol`.
+
+    (serialize :keyword :foobie)
+    (serialize :symbol 'cl:first)
 
 For signed integers, the USerial library defines the following
 serializers (and unserializers): `:int8` for signed bytes, `:int16`
