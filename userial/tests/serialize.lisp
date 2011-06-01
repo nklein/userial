@@ -280,6 +280,78 @@
       (buffer-rewind)
       (nth-value 0 (unserialize-list* '(:int16 :string :uint8 :uint16))))))
 
+;;; testing keyed slot and accessor serializers
+(defun prepare-sample-people-hash (&rest peeps)
+  (let ((hash (make-hash-table :test 'equal)))
+    (mapcar #'(lambda (pp)
+                (destructuring-bind (n i a) pp
+                  (setf (gethash n hash) (make-person :name n
+                                                      :initial i
+                                                      :age a))))
+            peeps)
+    hash))
+
+(defun prepare-standard-people-in-hash ()
+  (prepare-sample-people-hash '("Alice" :a 31)
+                              '("Bob"   :b 40)
+                              '("Carol" :c 37)))
+
+(defvar *people* nil)
+
+(defun find-person-by-name (pname)
+  (gethash pname *people*))
+
+(defun find-person-by-name-and-age (pname page)
+  (let ((pp (find-person-by-name pname)))
+    (when (and pp (= page (person-age pp)))
+      pp)))
+
+(nst:def-fixtures sample-people-in-hash
+  (:documentation "Prepare some sample people in a hash table")
+  (*people* (prepare-standard-people-in-hash)))
+
+(make-key-slot-serializer (:change-person-attrs found-person
+                             (:string name pname)
+                             (find-person-by-name pname))
+   :alphas initial
+   :uint8 age)
+
+(make-key-accessor-serializer (:change-person-age found-person
+                                 (:string (person-name found-person) pname
+                                  :uint8  (person-age found-person) page)
+                                 (find-person-by-name-and-age pname page))
+   :uint8 person-age)
+
+(nst:def-test-group keyed-slot-and-accessor-serializers (sample-people-in-hash)
+  (:documentation "Verify that the MAKE-KEY-SLOT-SERIALIZER and MAKE-KEY-ACCESSOR-SERIALIZER work")
+  (nst:def-test serialize-with-k/s (:array-equalp (5 65 108 105 99 101 25 21))
+    (with-buffer (make-buffer 8)
+      (serialize :change-person-attrs (make-person :name "Alice"
+                                                   :initial :z
+                                                   :age 21))))
+  (nst:def-test serialize-unserialize-with-k/s (:equalp '(:z 21))
+    (with-buffer (make-buffer 8)
+      (serialize :change-person-attrs (make-person :name "Alice"
+                                                   :initial :z
+                                                   :age 21))
+      (buffer-rewind)
+      (unserialize :change-person-attrs)
+      (with-slots (initial age) (find-person-by-name "Alice")
+        (list initial age))))
+  
+  (nst:def-test serialize-with-k/a (:array-equalp (3 66 111 98 40 40))
+    (with-buffer (make-buffer 6)
+      (serialize :change-person-age (make-person :name "Bob" :age 40))))
+  
+  (nst:def-test serialize-unserialize-with-k/a (:equal 42)
+    (with-buffer (make-buffer 6)
+      (serialize :string "Bob")
+      (serialize :uint8 40)
+      (serialize :uint8 42)
+      (buffer-rewind)
+      (unserialize :change-person-age)
+      (person-age (find-person-by-name "Bob")))))
+
 ;;; testing versioned serializers
 (contextl:deflayer v1)
 (contextl:deflayer v0.1)
@@ -298,6 +370,7 @@
         (serialize* :difficulty :low :difficulty :medium :difficulty :high))
       (contextl:with-active-layers (v2.0)
         (serialize* :difficulty :easy :difficulty :hard))))
+  
   (nst:def-test test-unserializing-versions (:equalp '(:low :high
                                                        :low :medium :high
                                                        :easy :hard))

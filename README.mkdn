@@ -632,18 +632,18 @@ and set the color.
 
     (make-key-accessor-serializer
         (:set-person-color found-person
-           (:string person-name pname)
+           (:string (person-name found-person) pname)
            (find-person-by-name pname))
       :string person-color)
     
     ;; store the color and then change it locally
     (defparameter *p* (make-person :name "Patrick" :age 40 :color "Green"))
-    (serialize :set-person-color *p*)
-    (setf (person-color *p*) "Orange")
+    (serialize :set-person-color (make-person :name "Patrick" :color "Orange")
     
     ;; restore the serialized color "Green"
     (buffer-rewind)
-    (setf *p* (unserialize :set-person-color))
+    (unserialize :set-person-color)
+       => #S(PERSON :NAME "Patrick" :AGE 40 :COLOR "Orange")
 
 One can incorporate more variables into either the key or the values
 and use either slots or accessors.
