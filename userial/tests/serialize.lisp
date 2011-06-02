@@ -112,6 +112,16 @@
                                  nil
                                  (list :blue :orange)))))
 
+;;; prepare a vector type for testing
+(make-vector-serializer :pixel :uint8 4)
+(nst:def-test-group test-vector-serializer ()
+  (nst:def-test serialize-vector (:array-equalp (3 4 5 6))
+    (with-buffer (make-buffer 4)
+      (serialize :pixel #(3 4 5 6))))
+  
+  (nst:def-test unserialize-vector (:equalp #(3 4 5 6))
+    (serialize-unserialize :pixel #(3 4 5 6))))
+
 ;;; check that strings and raw-byte arrays encode as expected
 (nst:def-test-group test-string-and-byte-serializing ()
   (:documentation "Test that strings and raw-byte arrays serialize
@@ -157,6 +167,21 @@
       (serialize :string "Foo")
       (buffer-rewind)
       (nth-value 0 (unserialize :raw-bytes :end 4)))))
+
+(nst:def-test-group test-symbol-serializing ()
+  (:documentation "Test that symbols and keywords serialize as expected")
+  (nst:def-test serialize-symbol (:array-equalp (9 83 69 82 73 65 76 73 90 69
+                                                 7 85 83 69 82 73 65 76))
+    (with-buffer (make-buffer 18)
+      (serialize :symbol 'serialize)))
+  (nst:def-test unserialize-symbol (:eq 'serialize)
+    (serialize-unserialize :symbol 'serialize))
+  
+  (nst:def-test serialize-keyword (:array-equalp (7 85 83 69 82 73 65 76))
+    (with-buffer (make-buffer 8)
+      (serialize :keyword :userial)))
+  (nst:def-test unserialize-keyword (:eq :userial)
+    (serialize-unserialize :keyword :userial)))
 
 ;;; test serializing sequences of things
 (nst:def-test-group test-serialize* ()
