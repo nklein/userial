@@ -506,10 +506,14 @@
 
 (defmacro make-global-variable-serializer
     ((key value-key &key layer) &rest global-vars)
-  (let ((var-sym (gensym "VAR-"))
-        (sym (gensym "SYM-")))
-    `(make-key-accessor-serializer
-         (,key ,var-sym (:symbol (ecase ,var-sym (,global-vars ,var-sym)) ,sym)
-                        (ecase ,sym (,global-vars ,sym))
-                        :layer ,layer)
-         ,value-key symbol-value)))
+  (let ((enum-key (gensym "ENUM-"))
+        (var-sym (gensym "VAR-")))
+    `(progn
+       (make-enum-serializer ',enum-key (,@global-vars) :layer ,layer)
+       (define-serializer (,key ,var-sym :layer ,layer)
+         (serialize ',enum-key ,var-sym)
+         (serialize ,value-key (symbol-value ,var-sym)))
+       (define-unserializer (,key :layer ,layer)
+         (let ((,var-sym (unserialize ',enum-key)))
+           (setf (symbol-value ,var-sym) (unserialize ,value-key))
+           ,var-sym)))))
