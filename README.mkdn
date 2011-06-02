@@ -621,6 +621,20 @@ can do the following:
     
 The `make-list-serializer` can also take a `layer` keyword parameter.
 
+The `make-list-serializer` encodes the length of the list, then
+the elements.  If the length is known from context, one might
+instead use the `make-vector-serializer` which serializes a
+sequence of a given length and unserializes to a vector.  The
+`make-vector-serializer` macro takes three parameters: the key
+to use for this serializer, the key used to encode each element
+of the sequence, and the length of the sequence.  For example,
+one might have something like this:
+
+    (make-vector-serializer :vec3 :float32 3)
+    
+    (make-vector-serializer :pixel :uint8 3)
+    (make-vector-serializer :pixel :uint8 4 :layer :v2.0)
+
 The USerial library allows one to create serializers with slots
 or accessors which allow a portion of the struct (or class) slots
 to be used as a key on the unserializing side to locate the object.  An
