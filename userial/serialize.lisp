@@ -417,7 +417,7 @@
         (value (gensym "VALUE-")))
     `(progn
        (define-serializer (,type ,value :layer ,layer)
-         (declare (type (vector * ,length) value))
+         (declare (type (vector * ,length) ,value))
          (loop :for ,elt :across ,value
             :do (serialize ,element-type ,elt)))
        (define-unserializer (,type :layer ,layer)
