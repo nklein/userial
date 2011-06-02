@@ -12,4 +12,5 @@
                               :serial t
                               :components ((:file "package")
                                            (:file "buffer")
-                                           (:file "serialize")))))))
+                                           (:file "serialize")
+                                           (:file "func")))))))
