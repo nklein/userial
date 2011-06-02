@@ -377,6 +377,35 @@
       (unserialize :change-person-age)
       (person-age (find-person-by-name "Bob")))))
 
+(defparameter *low* nil)
+(defparameter *high* nil)
+(make-global-variable-serializer (:cutoffs :uint) *low* *high*)
+
+(nst:def-test-group test-global-variable-serializer ()
+  (:documentation "Verify that the MAKE-GLOBAL-VARIABLE-SERIALIZER works")
+  (nst:def-test serialize-global-variable
+      (:array-equalp (0 10 1 100))
+    (with-buffer (make-buffer 4)
+      (let ((*low* 10)
+            (*high* 100))
+        (serialize :cutoffs '*low*)
+        (serialize :cutoffs '*high*))))
+  
+  (nst:def-test unserialize-global-variable (:equalp '(nil nil 50 200))
+    (with-buffer (make-buffer 5)
+      (let ((*low* 50)
+            (*high* 200))
+        (serialize :cutoffs '*low*)
+        (serialize :cutoffs '*high*))
+      (buffer-rewind)
+      (let ((aa *low*)
+            (bb *high*)
+            (*low* 0)
+            (*high* 0))
+        (unserialize :cutoffs)
+        (unserialize :cutoffs)
+        (list aa bb *low* *high*)))))
+
 ;;; testing versioned serializers
 (contextl:deflayer v1)
 (contextl:deflayer v0.1)
