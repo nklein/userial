@@ -1,7 +1,7 @@
 ;; Copyright (c) 2011 nklein software
 ;; MIT License. See included LICENSE.txt file for licensing details.
 
-# USerial v0.7.2011.05.24
+# USerial v0.8.2011.06.02
 
 Patrick Stein <pat@nklein.com>
 
@@ -29,15 +29,15 @@ Patrick Stein <pat@nklein.com>
 ## <a name="obtaining">Obtaining</a>
 
 * The USerial home page: [http://nklein.com/software/unet/userial/][userial]
-* The tarball:  [userial_0.7.2011.05.24.tar.gz][tarball]
-* The signature: [userial_0.7.2011.05.24.tar.gz.asc][sig]
+* The tarball:  [userial_0.8.2011.06.02.tar.gz][tarball]
+* The signature: [userial_0.8.2011.06.02.tar.gz.asc][sig]
 * The main git repository: [http://git.nklein.com/lisp/libs/userial.git/][git]
 * Browsable git mirror: [https://github.com/nklein/userial][github]
 * Issue reporting: [https://github.com/nklein/userial/issues][issues]
 
   [userial]: http://nklein.com/software/unet/userial/
-  [tarball]: http://nklein.com/wp-content/uploads/2011/05/userial_0.7.2011.05.24.tar.gz
-  [sig]:     http://nklein.com/wp-content/uploads/2011/05/userial_0.7.2011.05.24.tar.gz.asc
+  [tarball]: http://nklein.com/wp-content/uploads/2011/06/userial_0.8.2011.06.02.tar.gz
+  [sig]:     http://nklein.com/wp-content/uploads/2011/06/userial_0.8.2011.06.02.tar.gz.asc
   [git]:     http://git.nklein.com/lisp/libs/userial.git
   [github]:  https://github.com/nklein/userial
   [issues]:  https://github.com/nklein/userial/issues
