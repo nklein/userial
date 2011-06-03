@@ -120,11 +120,10 @@ The USerial library provides a function for allocating a new buffer.
 This function is described in the
 ["Creating Buffers" section](#make-buffer) below.
 
-USerial library routines use the buffer in the special variable `*buffer*`.
-There is a macro one can use to execute a body of statemets with a
-particular buffer as the default
-for calls in which the buffer parameter is omitted.  This macro is
-described in the ["Using a Buffer" section](#with-buffer) below.
+USerial library routines use the buffer in the special variable
+`*buffer*`.  There is a macro one can use to execute a body of
+statemets with a particular buffer.  This macro is described in the
+["Using a Buffer" section](#with-buffer) below.
 
 There are a variety of functions provided to allow one to
 query and manipulate the size of USerial buffers.  These functions
@@ -454,9 +453,8 @@ reference point and define an unserializer that does the inverse given
 the same reference point.
 
     (define-serializer (:offset-vector point :extra (reference))
-       (serialize* (:float32 (- (vec-x point) (vec-x reference))
-                    :float32 (- (vec-y point) (vec-y reference)))
-          :buffer buffer))
+       (serialize* :float32 (- (vec-x point) (vec-x reference))
+                   :float32 (- (vec-y point) (vec-y reference))))
           
     (define-unserializer (:offset-vector :extra (reference))
        (unserialize-let* (:float32 dx :float32 dy) buffer
@@ -469,10 +467,9 @@ would could add an additional serializer in layer `:v2.0`.
     (define-serializer (:offset-vector point
                                        :layer :v2.0
                                        :extra (reference))
-       (serialize* (:float32 (- (vec-x point) (vec-x reference))
-                    :float32 (- (vec-y point) (vec-y reference))
-                    :float32 (- (vec-z point) (vec-z reference)))
-          :buffer buffer))
+       (serialize* :float32 (- (vec-x point) (vec-x reference))
+                   :float32 (- (vec-y point) (vec-y reference))
+                   :float32 (- (vec-z point) (vec-z reference))))
 
 Almost every protocol requires the encoding and decoding of
 integer values.  To make it easy to create as many of these
@@ -578,7 +575,7 @@ or for public use (where the age is kept secret).
 
 An optional `layer` keyword argument can be given following the three
 required parts of the opening form of each of those macros.  The
-first item in the opengin form of each of those macros is the keyword
+first item in the opening form of each of those macros is the keyword
 used to identify the serializer and unserializer.  The second item in
 the opening form of each of those macros is the variable name used as
 a keyword parameter in the unserialize method to allow one to pass in
