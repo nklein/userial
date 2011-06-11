@@ -474,7 +474,8 @@
                         :appending (list (first aa)
                                          (let ((ff (second aa)))
                                            (if (symbolp ff)
-                                               `(slot-value ,var ',ff)
+                                               `(when (slot-boundp ,var ',ff)
+                                                  (slot-value ,var ',ff))
                                                ff)))))
        (,serialize-it ,var ,@type-*-pairs))
      (define-unserializer (,key :layer ,layer
