@@ -26,6 +26,7 @@
            :make-key-accessor-serializer
            :make-key-slot-serializer
            :make-list-serializer
+           :make-maybe-serializer
            :make-simple-serializer
            :make-slot-serializer
            :make-uint-serializer

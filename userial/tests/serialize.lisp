@@ -406,6 +406,32 @@
         (unserialize :cutoffs)
         (list aa bb *low* *high*)))))
 
+;; prepare for serializing possibly nil items
+(make-maybe-serializer :maybe-string :string)
+(make-maybe-serializer :maybe-uint32 :uint32)
+
+(nst:def-test-group test-maybe-serializer ()
+  (:documentation "Verify that the MAKE-GLOBAL-VARIABLE-SERIALIZER works")
+  (nst:def-test serialize-maybe
+      (:array-equalp (1 3 70 111 111 0 1 0 0 4 163 0))
+    (with-buffer (make-buffer 12)
+      (serialize* :maybe-string "Foo"
+                  :maybe-string nil
+                  :maybe-uint32 1187
+                  :maybe-uint32 nil)))
+  
+  (nst:def-test unserialize-maybe (:equalp '("Foo" nil 1187 nil))
+    (with-buffer (make-buffer 12)
+      (serialize* :maybe-string "Foo"
+                  :maybe-string nil
+                  :maybe-uint32 1187
+                  :maybe-uint32 nil)
+      (buffer-rewind)
+      (nth-value 0 (unserialize-list* '(:maybe-string
+                                        :maybe-string
+                                        :maybe-uint32
+                                        :maybe-uint32))))))
+
 ;;; testing versioned serializers
 (contextl:deflayer v1)
 (contextl:deflayer v0.1)

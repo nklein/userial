@@ -694,6 +694,13 @@ into one of the above variables.
     (buffer-rewind)
     (unserialize :global-person)
     *moderator* => #S(PERSON :NAME "Patrick" :AGE 40 :COLOR "Green")
+    
+The USerial library allows one to define a serializer for a
+possibly `nil` object.  Given the above serializer for
+`:vec3`, one could define a serializer for an item which is
+either `nil` or a `vec3` with:
+
+    (make-maybe-serializer :maybe-vec3 :vec3)
 
 The USerial library allows one to alias serializers.  For example,
 if one were encoding object ids as unsigned 32-bit integers, one

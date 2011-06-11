@@ -517,3 +517,14 @@
          (let ((,var-sym (unserialize ',enum-key)))
            (setf (symbol-value ,var-sym) (unserialize ,value-key))
            ,var-sym)))))
+
+(defmacro make-maybe-serializer (key value-key &key layer)
+  (let ((var-sym (gensym "VAR-")))
+    `(progn
+       (define-serializer (,key ,var-sym :layer ,layer)
+         (serialize :boolean (if ,var-sym t nil))
+         (when ,var-sym
+           (serialize ,value-key ,var-sym)))
+       (define-unserializer (,key :layer ,layer)
+         (when (unserialize :boolean)
+           (unserialize ,value-key))))))
