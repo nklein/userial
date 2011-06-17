@@ -30,10 +30,17 @@
                  types values))))
 
 (defmacro serialize-slots* (object &rest type-slot-plist)
-  (multiple-value-bind (vars types slots)
-      (get-syms-types-places type-slot-plist)
-    `(with-slots ,(mapcar #'quote-2 vars slots) ,object
-         (serialize* ,@(apply #'append (mapcar #'quote-2 types vars))))))
+  (let ((obj-sym (gensym "OBJ-")))
+    (labels ((do-slot (tt ss)
+               `(,tt (when (slot-boundp ,obj-sym ',ss)
+                       (slot-value ,obj-sym ',ss)))))
+      (multiple-value-bind (vars types slots)
+          (get-syms-types-places type-slot-plist)
+        (declare (ignore vars))
+        `(let ((,obj-sym ,object))
+           (serialize* ,@(loop :for tt :in types
+                               :for ss :in slots
+                            :appending (do-slot tt ss))))))))
 
 (defmacro serialize-accessors* (object &rest type-accessor-plist)
   (multiple-value-bind (vars types accessors)
@@ -483,7 +490,8 @@
        (declare (ignorable ,var))
        (unserialize-let* ,(loop :for aa :on type-getter-var-list :by #'cdddr
                              :appending (list (first aa) (third aa)))
-         (,unserialize-it ,finder-form ,@type-*-pairs)))))
+         ,(when type-*-pairs
+            `(,unserialize-it ,finder-form ,@type-*-pairs))))))
 
 (defmacro make-key-slot-serializer ((key var
                                          type-getter-var-list
