@@ -6,6 +6,7 @@
   :version "0.8.2011.06.02"
   :author "Patrick Stein <pat@nklein.com>"
   :licence "MIT"
+  :encoding :utf-8
   :depends-on ("userial" "nst")
   :components ((:module "userial"
                 :components ((:module "tests"
