@@ -18,3 +18,23 @@
                              (:file "peek")))
                (:static-file "README.mkdn")
                (:static-file "LICENSE.txt")))
+
+(asdf:defsystem :userial-tests
+  :description "tests for userial serialization library"
+  :version "0.8.2011.06.02"
+  :author "Patrick Stein <pat@nklein.com>"
+  :licence "MIT"
+  :encoding :utf-8
+  :depends-on ("userial" "nst")
+  :components ((:module "userial"
+                :components ((:module "tests"
+                              :serial t
+                              :components ((:file "package")
+                                           (:file "buffer")
+                                           (:file "serialize")
+                                           (:file "func")))))))
+
+(defmethod asdf:perform ((op asdf:test-op)
+                         (system (eql (asdf:find-system :userial))))
+  (asdf:load-system :userial-tests)
+  (funcall (find-symbol (symbol-name :run-tests) :userial-tests)))
