@@ -4,7 +4,7 @@
 (asdf:defsystem :userial
   :description
     "userial: a serialization library for binary message encoding."
-  :version "0.8.2011.06.02"
+  :version "0.8.20110602"
   :author "Patrick Stein <pat@nklein.com>"
   :licence "MIT"
   :depends-on ("ieee-floats" "trivial-utf-8" "contextl")
@@ -21,7 +21,7 @@
 
 (asdf:defsystem :userial-tests
   :description "tests for userial serialization library"
-  :version "0.8.2011.06.02"
+  :version "0.8.20110602"
   :author "Patrick Stein <pat@nklein.com>"
   :licence "MIT"
   :encoding :utf-8
