@@ -7,9 +7,9 @@
   "Take a list like (:UINT AA :STRING BB :COW CC) and return three lists, the third the list (AA BB CC), the second the list (:UINT :STRING :COW), and the first a list of #'GENSYM symbols as long as the other lists are."
   (cond
     ((null type-place-list)
-        (values (nreverse vars)
-                (nreverse types)
-                (nreverse places)))
+        (values (reverse vars)
+                (reverse types)
+                (reverse places)))
     ((= (length type-place-list) 1)
         (error "odd-number of type-value pairs"))
     (t  (get-syms-types-places (rest (rest type-place-list))
@@ -34,4 +34,4 @@
           (separate-docstring-and-decls (rest body)
                                         docstring
                                         (cons first decls)))
-      (t (values (nconc docstring (nreverse decls)) body)))))
+      (t (values (append docstring (reverse decls)) body)))))

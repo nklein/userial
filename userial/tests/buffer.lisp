@@ -8,8 +8,7 @@
     (:documentation "Prepare some buffers of different sizes")
   (small  (make-buffer 10))
   (medium (make-buffer 1024))
-  (large  (make-buffer))
-  (base-buffers (list small medium large)))
+  (large  (make-buffer)))
 
 ;;; prepare a criterion that looks for an array whose zeroth dimension is NN
 (nst:def-criterion-alias (:array-dim-0 nn)
@@ -18,16 +17,16 @@
 ;;; test to make sure buffers are constructed as expected
 (nst:def-test-group buffer-construction (simple-buffers)
   (:documentation "Test construction of buffers")
-  (nst:def-test make-buffer (:each (:true)) base-buffers)
+  (nst:def-test make-buffer (:each (:true)) (list small medium large))
   (nst:def-test sizes-right (:seq (:array-dim-0 10)
                                   (:array-dim-0 1024)
                                   (:array-dim-0 32768))
-    base-buffers)
+    (list small medium large))
   (nst:def-test fill-pointer-is-right (:each (:apply fill-pointer (:eql 0)))
-    base-buffers)
+    (list small medium large))
   (nst:def-test element-type-is-right
       (:each (:apply array-element-type
-                     (:equalp '(unsigned-byte 8)))) base-buffers))
+                     (:equalp '(unsigned-byte 8)))) (list small medium large)))
 
 ;;; prepare a criterion that checks the length of a given array
 (nst:def-criterion-alias (:length-is nn)
@@ -42,21 +41,21 @@
   (nst:def-test length-right (:seq (:length-is 0)
                                    (:length-is 0)
                                    (:length-is 0))
-    base-buffers)
+    (list small medium large))
   (nst:def-test capacity-right (:seq (:capacity-is 10)
                                      (:capacity-is 1024)
                                      (:capacity-is 32768))
-    base-buffers)
+    (list small medium large))
   (nst:def-test advance-works (:seq (:length-is 512)
                                     (:length-is 512)
                                     (:length-is 512))
-    (dolist (buf base-buffers base-buffers)
+    (dolist (buf (list small medium large) (list small medium large))
       (with-buffer buf
         (buffer-advance 512))))
   (nst:def-test rewind-works (:seq (:length-is 0)
                                    (:length-is 0)
                                    (:length-is 0))
-    (mapcar #'(lambda (b) (with-buffer b (buffer-rewind))) base-buffers))
+    (mapcar #'(lambda (b) (with-buffer b (buffer-rewind))) (list small medium large)))
   (nst:def-test with-buffer-works (:seq (:eql 0)
                                         (:eql 10)
                                         (:eql 32))
