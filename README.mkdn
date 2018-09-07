@@ -1,7 +1,7 @@
 ;; Copyright (c) 2011 nklein software
 ;; MIT License. See included LICENSE.txt file for licensing details.
 
-# USerial v0.8.2011.06.02
+# USerial v0.8.20180807
 
 Patrick Stein <pat@nklein.com>
 
@@ -25,19 +25,15 @@ Patrick Stein <pat@nklein.com>
   + [Placing Ships](#placing)
   + [Pinging](#pinging)
   + [Firing](#firing)
-  
+
 ## <a name="obtaining">Obtaining</a>
 
 * The USerial home page: [http://nklein.com/software/unet/userial/][userial]
-* The tarball:  [userial_0.8.2011.06.02.tar.gz][tarball]
-* The signature: [userial_0.8.2011.06.02.tar.gz.asc][sig]
 * The main git repository: [http://git.nklein.com/lisp/libs/userial.git/][git]
 * Browsable git mirror: [https://github.com/nklein/userial][github]
 * Issue reporting: [https://github.com/nklein/userial/issues][issues]
 
   [userial]: http://nklein.com/software/unet/userial/
-  [tarball]: http://nklein.com/wp-content/uploads/2011/06/userial_0.8.2011.06.02.tar.gz
-  [sig]:     http://nklein.com/wp-content/uploads/2011/06/userial_0.8.2011.06.02.tar.gz.asc
   [git]:     http://git.nklein.com/lisp/libs/userial.git
   [github]:  https://github.com/nklein/userial
   [issues]:  https://github.com/nklein/userial/issues
@@ -64,7 +60,7 @@ hierarchy of ContextL layers and define serialize functions for
 different items at different points in the hierarchy.
 
   [contextl]: http://common-lisp.net/project/closer/contextl.html
-  
+
 For example, suppose one wanted to implement versions 1.0, 1.1, and
 1.0.1 with both 1.1 and 1.0.1 extending 1.0 but unrelated to each
 other.  One could use ContextL's `deflayer` macro as follows:
@@ -87,10 +83,10 @@ which layer is activated in ContextL.
 
     (with-active-layers (:v1.0)
       (serialize :list-of-int '(3 4 5))) => encoded as :int16
-      
+
     (with-active-layers (:v1.0.1)
       (serialize :list-of-int '(3 4 5))) => encoded as :int16
-    
+
     (with-active-layers (:v1.1)
       (serialize :list-of-int '(3 4 5))) => encoded as :int32
 
@@ -160,7 +156,7 @@ buffer it adds at least the minimum of the current buffer size and
 this `+default-buffer-expand+`.
 
     (defconstant +default-buffer-expand+ 8192)
-    
+
 For example, if the buffer were currently 256 bytes when the buffer
 needed to grow by a byte, it would be expanded to 512 bytes.  If the
 buffer were currently 10,000 bytes when the buffer needed to grow by a
@@ -174,7 +170,7 @@ an optional parameter specifying the initial capacity of the buffer.
     (ftype (function (&optional (integer 1 *)) buffer) make-buffer)
     (defun make-buffer (&optional initial-capacity)
       ...)
-      
+
 As the buffer will be resized as needed, this parameter need not be
 set high enough to accomodate any and all serializations.  It is
 provided merely to keep from having to reallocate the buffer several
@@ -228,7 +224,7 @@ unserialization.
            buffer-advance)
     (defun buffer-advance (&optional (amount 1))
       ...)
-      
+
 If not specified, the `buffer-advance` function advances by a single
 byte.
 
@@ -258,7 +254,7 @@ the current fill pointer and advance the fill pointer.
     (ftype (function () (values uchar buffer))
            buffer-get-byte)
     (defun buffer-get-byte ())
-    
+
 ## <a name="serializing">Serializing and Unserializing</a>
 
 The ultimate purpose of the USerial library is to allow one to
@@ -403,7 +399,7 @@ following to serialize an instance `*person-instance*`.
           :string name
           :uint8  age
           :string hair-color)
-                      
+
     (serialize-accessors* *person-instance*
           :string person-name
           :uint8  person-age
@@ -416,7 +412,7 @@ following ways.
           :string name
           :uint8  age
           :string hair-color)
-                      
+
     (unserialize-accessors* *person-instance*
           :string person-name
           :uint8  person-age
@@ -427,7 +423,7 @@ the object as the first return value and the buffer as the
 second return value.  One can reasonably use `(make-person)`
 or some other factory in place of the `*person-instance*` in
 the above examples.
-                               
+
 ### <a name="define-serializers">Defining New Serializers</a>
 
 This section describes some macros available for creating serialize
@@ -446,7 +442,7 @@ At the most basic level, one can define a serializer using the
       ...body...)
     (define-unserializer (key &key layer extra)
       ...body...)
-    
+
 For example, assuming there is already a `:float32` encoder, one might
 define a serializer that serializes a vector's offset from a specified
 reference point and define an unserializer that does the inverse given
@@ -455,7 +451,7 @@ the same reference point.
     (define-serializer (:offset-vector point :extra (reference))
        (serialize* :float32 (- (vec-x point) (vec-x reference))
                    :float32 (- (vec-y point) (vec-y reference))))
-          
+
     (define-unserializer (:offset-vector :extra (reference))
        (unserialize-let* (:float32 dx :float32 dy) buffer
           (make-vec :x (+ (vec-x reference) dx)
@@ -488,13 +484,13 @@ available when layer `:v1.2` is active, one could simply call:
     (make-int-serializer :signed-byte 1)
     (make-int-serializer :signed-quadword 8 :layer :v1.2)
 
-    
+
 This macro will serialize integers in big-endian
 [two's complement][twos-comp] form for the greatest compatibility with
 standard protocols.
 
   [twos-comp]: (http://en.wikipedia.org/wiki/Two's_complement)
-  
+
 Similarly, if one wanted to create serialize and unserialize
 methods for unsigned bytes and unsigned doublewords, one could
 use the following macro:
@@ -597,7 +593,7 @@ buffer using the key.
                    (buffer-rewind)
                    (nth-value 0 (unserialize key))))
     U-S
-                                 
+
     CL-USER> (defvar *p* (make-person :name "Patrick"
                                       :age 40
                                       :color "Green"))
@@ -608,14 +604,14 @@ buffer using the key.
 
     CL-USER> (u-s :person-public *p*)
     #S(PERSON :NAME "Patrick" :AGE :UNKNOWN :COLOR "Green")
-    
+
 One can also define a serialize/unserialize pair for a list
 where each item uses the same serializer.  For example, one
 can do the following:
 
     (make-list-serializer :string-list :string)
     (serialize :string-list (list "a" "b" "c" "d"))
-    
+
 The `make-list-serializer` can also take a `layer` keyword parameter.
 
 The `make-list-serializer` encodes the length of the list, then
@@ -628,7 +624,7 @@ of the sequence, and the length of the sequence.  For example,
 one might have something like this:
 
     (make-vector-serializer :vec3 :float32 3)
-    
+
     (make-vector-serializer :pixel :uint8 3)
     (make-vector-serializer :pixel :uint8 4 :layer :v2.0)
 
@@ -646,11 +642,11 @@ and set the color.
            (:string (person-name found-person) pname)
            (find-person-by-name pname))
       :string person-color)
-    
+
     ;; store the color and then change it locally
     (defparameter *p* (make-person :name "Patrick" :age 40 :color "Green"))
     (serialize :set-person-color (make-person :name "Patrick" :color "Orange")
-    
+
     ;; restore the serialized color "Green"
     (buffer-rewind)
     (unserialize :set-person-color)
@@ -664,7 +660,7 @@ and use either slots or accessors.
                                   (find-person-by-name pname))
       :uint8 age
       :string color)
-      
+
     (make-key-slot-serializer (:change-color-by-name-and-age found-person
                                   (:string name p-name
                                    :uint8 age p-age)
@@ -682,19 +678,19 @@ into one of the above variables.
                                            :age 40
                                            :color "Green"))
     (defparameter *author* nil)
-    
+
     (make-global-variable-serializer (:global-person :person-internal)
       *moderator* *author*)
-    
+
     ;; serialize the moderator and clear it
     (serialize :global-person '*moderator*)
     (setf *moderator* nil)
-    
+
     ;; rewind the buffer and restore the moderator
     (buffer-rewind)
     (unserialize :global-person)
     *moderator* => #S(PERSON :NAME "Patrick" :AGE 40 :COLOR "Green")
-    
+
 The USerial library allows one to define a serializer for a
 possibly `nil` object.  Given the above serializer for
 `:vec3`, one could define a serializer for an item which is
@@ -815,7 +811,7 @@ use the `:raw-bytes` serializer.
 
     (serialize :raw-bytes byte-array
                &key (start 0) (end (length bytes-array)))
-    
+
     (unserialize :raw-bytes byte-array
                &key output (start 0) (end (length output)))
 
@@ -829,7 +825,7 @@ serializer for encoding an option that will be either `nil` or `t`.
 
   [ieee]: http://common-lisp.net/project/ieee-floats/
   [utf]: http://common-lisp.net/project/trivial-utf-8/
-  
+
 ## <a name="protocol">Sample Application: Game Protocol</a>
 
 This example shows how one might use the tools above to serialize
@@ -1010,7 +1006,7 @@ distances to ships, the ack message could be encoded like this:
                   :float32 remaining-ping-energy
                   :uint16 (length hits))
       (mapcar #'(lambda (d) (serialize :uint8 d)) hits))
-      
+
 ### <a name="firing">Firing</a>
 
 To send a fire message, the client just sends the coordinates of
@@ -1026,16 +1022,16 @@ message to the opponent.  Either way, a shot results message must
 be sent to the client.
 
     (make-enum-serializer :shot-result (:hit :miss))
-    
+
     (defun make-sunk-message (x y)
       (with-buffer (make-buffer)
         (serialize* :server-opcodes :sunk
                     :int8           x
                     :int8           y)))
-                  
+
     (defun make-shot-results-message (hit)
       (with-buffer (make-buffer)
         (serialize* :server-opcodes :shot-results
                     :shot-result    (if hit :hit :miss))))
-                         
+
   [bship]: http://en.wikipedia.org/wiki/Battleship_(game)
